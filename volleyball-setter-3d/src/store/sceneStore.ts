@@ -1,0 +1,195 @@
+import { create } from 'zustand'
+import type { CourtTheme, PlayerState, Quality, RouteParams, Vec2 } from '../types'
+import type { RouteCandidate, StyleId } from '../logic/presets'
+import { DEFAULT_FORMATION } from '../logic/court'
+
+interface SceneState {
+  players: PlayerState[]
+  setterId: string
+  attackerId: string
+  params: RouteParams
+  selectedCandidateId: string | null
+  /** 当前选中的风格（用于质量检查的风格化标准） */
+  selectedStyle: StyleId | null
+  quality: Quality
+  theme: CourtTheme
+  showZones: boolean
+  /** 攻手助跑距离（米，攻手站位到击球点） */
+  approachDist: number
+
+  setParams: (partial: Partial<RouteParams>) => void
+  setTarget: (pos: Vec2) => void
+  setPlayerPos: (id: string, pos: Vec2) => void
+  setSetter: (id: string) => void
+  setAttacker: (id: string) => void
+  applyCandidate: (c: RouteCandidate) => void
+  clearCandidate: () => void
+  resetFormation: () => void
+  setQuality: (q: Quality) => void
+  setTheme: (t: CourtTheme) => void
+  setShowZones: (v: boolean) => void
+  setApproachDist: (d: number) => void
+}
+
+export const DEFAULT_PARAMS: RouteParams = {
+  mode: 'apex',
+  apexH: 3.4,
+  flightT: 0.85,
+  speed: 8.5,
+  arc: 'high',
+  target: { x: 0.95, z: 7.0 },
+  contactH: 2.85,
+  releaseH: 2.2,
+}
+
+function clampTarget(p: { x: number; z: number }): { x: number; z: number } {
+  return {
+    x: Math.max(0.25, Math.min(8.75, p.x)),
+    z: Math.max(0.25, Math.min(8.75, p.z)),
+  }
+}
+
+export const useSceneStore = create<SceneState>((set) => ({
+  players: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
+  setterId: 'p1',
+  attackerId: 'p2',
+  params: { ...DEFAULT_PARAMS, target: { ...DEFAULT_PARAMS.target } },
+  selectedCandidateId: null,
+  selectedStyle: null,
+  quality: 'high',
+  theme: 'blue',
+  showZones: true,
+  approachDist: 2.4,
+
+  setParams: (partial) => set((s) => ({ params: { ...s.params, ...partial } })),
+  setTarget: (pos) =>
+    set((s) => ({ params: { ...s.params, target: pos }, selectedCandidateId: null, selectedStyle: null })),
+  setPlayerPos: (id, pos) =>
+    set((s) => {
+      const prev = s.players.find((p) => p.id === id)
+      const players = s.players.map((p) => (p.id === id ? { ...p, pos } : p))
+      // 攻手移动时，击球点随攻手平移（保持相对偏移）
+      if (prev && id === s.attackerId && (prev.pos.x !== pos.x || prev.pos.z !== pos.z)) {
+        const newTarget = clampTarget({
+          x: s.params.target.x + (pos.x - prev.pos.x),
+          z: s.params.target.z + (pos.z - prev.pos.z),
+        })
+        return {
+          players,
+          params: {
+            ...s.params,
+            target: newTarget,
+          },
+          approachDist: Math.hypot(pos.x - newTarget.x, pos.z - newTarget.z),
+          selectedCandidateId: null,
+        }
+      }
+      return { players }
+    }),
+  setSetter: (id) => set({ setterId: id }),
+  setAttacker: (id) =>
+    set((s) => {
+      if (id === s.attackerId) return { attackerId: id }
+      const old = s.players.find((p) => p.id === s.attackerId)
+      const next = s.players.find((p) => p.id === id)
+      if (!old || !next) return { attackerId: id }
+      // 切换攻手时，击球点同样重新锚定到新攻手附近（保持相对偏移）
+      return {
+        attackerId: id,
+        params: {
+          ...s.params,
+          target: clampTarget({
+            x: s.params.target.x + (next.pos.x - old.pos.x),
+            z: s.params.target.z + (next.pos.z - old.pos.z),
+          }),
+        },
+        selectedCandidateId: null,
+      }
+    }),
+  applyCandidate: (c) =>
+    set((s) => ({
+      params: {
+        ...s.params,
+        mode: 'apex',
+        apexH: c.params.apexH,
+        target: { ...c.params.target },
+        contactH: c.params.contactH,
+      },
+      // 攻手随所选球种移动到对应的助跑站位
+      players: s.players.map((p) => (p.id === s.attackerId ? { ...p, pos: { ...c.stand } } : p)),
+      approachDist: Math.hypot(c.stand.x - c.params.target.x, c.stand.z - c.params.target.z),
+      selectedCandidateId: c.id,
+      selectedStyle: c.styleId,
+    })),
+  clearCandidate: () => set({ selectedCandidateId: null }),
+  resetFormation: () =>
+    set({
+      players: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
+    }),
+  setQuality: (quality) => set({ quality }),
+  setTheme: (theme) => set({ theme }),
+  setShowZones: (showZones) => set({ showZones }),
+  setApproachDist: (d) =>
+    set((s) => {
+      const atk = s.players.find((p) => p.id === s.attackerId)
+      if (!atk) return { approachDist: d }
+      const t = s.params.target
+      let dx = atk.pos.x - t.x
+      let dz = atk.pos.z - t.z
+      if (Math.hypot(dx, dz) < 0.05) {
+        // 方向退化时，默认从本方后场方向助跑
+        dx = 5.5 - t.x
+        dz = 4.5 - t.z
+      }
+      const len = Math.hypot(dx, dz) || 1
+      const pos = clampTarget({ x: t.x + (dx / len) * d, z: t.z + (dz / len) * d })
+      return {
+        approachDist: d,
+        players: s.players.map((p) => (p.id === s.attackerId ? { ...p, pos } : p)),
+      }
+    }),
+}))
+
+/** 导出当前局面为可序列化 JSON */
+export function exportScene(): string {
+  const s = useSceneStore.getState()
+  return JSON.stringify(
+    {
+      version: 1,
+      players: s.players,
+      setterId: s.setterId,
+      attackerId: s.attackerId,
+      params: s.params,
+      theme: s.theme,
+    },
+    null,
+    2,
+  )
+}
+
+/** 从 JSON 恢复局面；格式非法时返回错误信息，成功返回 null */
+export function importScene(json: string): string | null {
+  try {
+    const data = JSON.parse(json) as {
+      version?: number
+      players?: PlayerState[]
+      setterId?: string
+      attackerId?: string
+      params?: Partial<RouteParams>
+      theme?: CourtTheme
+    }
+    if (!Array.isArray(data.players) || data.players.length === 0) return '缺少球员数据'
+    const params = { ...useSceneStore.getState().params, ...(data.params ?? {}) }
+    useSceneStore.setState({
+      players: data.players,
+      setterId: data.setterId ?? data.players[0].id,
+      attackerId: data.attackerId ?? data.players[0].id,
+      params,
+      theme: data.theme === 'wood' ? 'wood' : 'blue',
+      selectedCandidateId: null,
+    })
+    return null
+  } catch {
+    return 'JSON 解析失败'
+  }
+}
