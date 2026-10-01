@@ -16,6 +16,14 @@ afterEach(() => useSceneStore.setState(saved))
 const pos = { x: 0.7, z: 1.6 }
 const target = { x: 1.05, z: 7 }
 
+it.each(['blue', 'wood', undefined])('导入主题 %s 保留已有存档选择，缺省使用木地板', theme => {
+  const scene = JSON.parse(exportScene())
+  if (theme === undefined) delete scene.theme
+  else scene.theme = theme
+  expect(importScene(JSON.stringify(scene))).toBeNull()
+  expect(useSceneStore.getState().theme).toBe(theme ?? 'wood')
+})
+
 // 独立搭建渲染关节，检查球与实际双手的接触，不复用反解公式。
 function actualHand(pose: Pose, side: 'L' | 'R', yaw: number) {
   const root = new THREE.Group()

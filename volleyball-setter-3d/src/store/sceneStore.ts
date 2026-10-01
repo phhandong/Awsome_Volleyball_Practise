@@ -60,7 +60,7 @@ export const useSceneStore = create<SceneState>((set) => ({
   selectedCandidateId: null,
   selectedStyle: null,
   quality: 'high',
-  theme: 'blue',
+  theme: 'wood',
   showZones: true,
   approachDist: 2.4,
 
@@ -204,7 +204,7 @@ export function importScene(json: string): string | null {
       setterId: data.setterId ?? data.players[0].id,
       attackerId: data.attackerId ?? data.players[0].id,
       params,
-      theme: data.theme === 'wood' ? 'wood' : 'blue',
+      theme: data.theme === 'blue' ? 'blue' : 'wood',
       selectedCandidateId: null,
       selectedStyle: null,
       approachDist: Math.hypot((players.find(p => p.id === data.attackerId) ?? players[0]).pos.x - params.target.x, (players.find(p => p.id === data.attackerId) ?? players[0]).pos.z - params.target.z),

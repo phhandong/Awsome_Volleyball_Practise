@@ -8,7 +8,6 @@ import { useUiStore } from '../../../store/uiStore'
 import { useQuality, useSolution } from '../useSolution'
 import { ROLE_NAMES, ZONE_NAMES, zoneOf } from '../../../logic/court'
 import { RouteList } from './RouteList'
-import { PlaybackBar } from './PlaybackBar'
 
 function SliderRow({
   label,
@@ -109,13 +108,6 @@ export function ControlPanel() {
 
   return (
     <div className="panel-inner">
-      <header className="panel-head">
-        <img className="brand-logo" src={`${import.meta.env.BASE_URL}volleyball.svg?v=2`} width="38" height="38" alt="" aria-hidden="true" />
-        <div>
-        <h1>排球进攻战术板</h1>
-        <p>3D 二传与攻手排练</p>
-        </div>
-      </header>
 
       <section className="sec">
         <h3>推荐方案（按风格）</h3>
@@ -299,11 +291,6 @@ export function ControlPanel() {
           <input type="checkbox" checked={showQuality} onChange={(e) => setShowQuality(e.target.checked)} />
           场景内显示质量图例（距离尺/高度尺等）
         </label>
-      </section>
-
-      <section className="sec">
-        <h3>动画播放</h3>
-        <PlaybackBar />
       </section>
 
       <section className="sec">

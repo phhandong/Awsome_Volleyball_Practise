@@ -27,10 +27,14 @@ export function beginGroundDrag(
   const onPointerUp = (): void => {
     window.removeEventListener('pointermove', onPointerMove)
     window.removeEventListener('pointerup', onPointerUp)
+    window.removeEventListener('pointercancel', onPointerUp)
+    window.removeEventListener('blur', onPointerUp)
     onEnd?.()
   }
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerUp)
+  window.addEventListener('blur', onPointerUp)
 }
 
 export function clampToCourt(x: number, z: number, margin = 0.3): { x: number; z: number } {
@@ -72,8 +76,12 @@ export function beginAxisDrag(
   const onPointerUp = (): void => {
     window.removeEventListener('pointermove', onPointerMove)
     window.removeEventListener('pointerup', onPointerUp)
+    window.removeEventListener('pointercancel', onPointerUp)
+    window.removeEventListener('blur', onPointerUp)
     onEnd?.()
   }
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerUp)
+  window.addEventListener('blur', onPointerUp)
 }

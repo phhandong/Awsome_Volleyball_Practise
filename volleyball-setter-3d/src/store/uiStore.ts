@@ -4,6 +4,10 @@ export type CameraMode = 'orbit' | 'pov'
 export type ViewPreset = 'coach' | 'baseline' | 'side' | 'top'
 
 interface UiState {
+  compact: boolean
+  panelOpen: boolean
+  desktopPanelOpen: boolean
+  povResetNonce: number
   cameraMode: CameraMode
   viewPreset: ViewPreset
   /** 重新触发同一预设的过渡动画 */
@@ -17,9 +21,19 @@ interface UiState {
   setPreset: (p: ViewPreset) => void
   setDragging: (v: boolean) => void
   setShowQuality: (v: boolean) => void
+  setCompact: (v: boolean) => void
+  setPanelOpen: (v: boolean) => void
+  resetPov: () => void
+  escape: () => void
 }
 
+const compact = typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches
+
 export const useUiStore = create<UiState>((set) => ({
+  compact,
+  panelOpen: !compact,
+  desktopPanelOpen: true,
+  povResetNonce: 0,
   cameraMode: 'orbit',
   viewPreset: 'coach',
   viewNonce: 0,
@@ -30,4 +44,12 @@ export const useUiStore = create<UiState>((set) => ({
   setPreset: (viewPreset) => set((s) => ({ cameraMode: 'orbit', viewPreset, viewNonce: s.viewNonce + 1 })),
   setDragging: (dragging) => set({ dragging }),
   setShowQuality: (showQuality) => set({ showQuality }),
+  setCompact: (compact) => set((s) => s.compact === compact ? s : ({
+    compact, panelOpen: compact ? false : s.desktopPanelOpen,
+  })),
+  setPanelOpen: (panelOpen) => set((s) => ({
+    panelOpen, ...(!s.compact ? { desktopPanelOpen: panelOpen } : {}),
+  })),
+  resetPov: () => set((s) => ({ povResetNonce: s.povResetNonce + 1 })),
+  escape: () => set((s) => s.compact && s.panelOpen ? { panelOpen: false } : { cameraMode: 'orbit' }),
 }))

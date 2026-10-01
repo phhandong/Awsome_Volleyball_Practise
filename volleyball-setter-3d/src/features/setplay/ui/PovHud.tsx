@@ -29,7 +29,6 @@ export function PovHud() {
           <div className="err-text">{solution.status === 'error' ? solution.message : ''}</div>
         )}
       </div>
-      <div className="pov-hint">拖动环视 · F 回正看球 · Esc 退出</div>
     </div>
   )
 }

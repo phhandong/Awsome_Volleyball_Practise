@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useSceneStore } from '../../../store/sceneStore'
 import { useUiStore, type ViewPreset } from '../../../store/uiStore'
 import { ballWorld, phaseAt, playback } from '../animation'
+import { fitCourtPosition } from '../../../logic/cameraFraming'
 
 const PRESETS: Record<ViewPreset, { pos: [number, number, number]; target: [number, number, number] }> = {
   coach: { pos: [13.5, 8.5, 12.5], target: [0, 1.2, 4.5] },
@@ -23,10 +24,13 @@ const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.m
 export function CameraRig({ flightT, attackT }: { flightT: number; attackT: number }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
   const gl = useThree((s) => s.gl)
+  const size = useThree((s) => s.size)
   const cameraMode = useUiStore((s) => s.cameraMode)
   const viewPreset = useUiStore((s) => s.viewPreset)
   const viewNonce = useUiStore((s) => s.viewNonce)
   const dragging = useUiStore((s) => s.dragging)
+  const modal = useUiStore((s) => s.compact && s.panelOpen)
+  const povResetNonce = useUiStore((s) => s.povResetNonce)
   const setter = useSceneStore((s) => s.players.find((p) => p.id === s.setterId)!)
   const params = useSceneStore((s) => s.params)
 
@@ -65,15 +69,17 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
     const controls = controlsRef.current
     if (!controls) return
     const p = PRESETS[viewPreset]
+    const position = viewPreset === 'coach' || viewPreset === 'top'
+      ? fitCourtPosition(p.pos, p.target, size.width / Math.max(1, size.height)) : p.pos
     anim.current = {
       fromP: camera.position.clone(),
       fromT: controls.target.clone(),
-      toP: new THREE.Vector3(...p.pos),
+      toP: new THREE.Vector3(...position),
       toT: new THREE.Vector3(...p.target),
       t: 0,
     }
     setBusy(true)
-  }, [viewNonce, viewPreset, cameraMode, camera])
+  }, [viewNonce, viewPreset, cameraMode, camera, size.width, size.height])
 
   // 用户手动操作打断预设过渡
   useEffect(() => {
@@ -96,16 +102,23 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
       smoothLook.current.set(params.target.x, params.contactH, params.target.z)
     } else {
       const p = PRESETS[viewPreset]
-      exitPose.current = { pos: new THREE.Vector3(...p.pos), target: new THREE.Vector3(...p.target) }
+      const position = viewPreset === 'coach' || viewPreset === 'top'
+        ? fitCourtPosition(p.pos, p.target, size.width / Math.max(1, size.height)) : p.pos
+      exitPose.current = { pos: new THREE.Vector3(...position), target: new THREE.Vector3(...p.target) }
       trans.current = { t: 0, fromP: camera.position.clone(), fromQ: camera.quaternion.clone(), toPov: false }
     }
     setBusy(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraMode])
 
+  useEffect(() => {
+    pov.current.yawOff = 0
+    pov.current.pitchOff = 0
+  }, [povResetNonce])
+
   // 第一人称环视交互
   useEffect(() => {
-    if (cameraMode !== 'pov') return
+    if (cameraMode !== 'pov' || modal) return
     const dom = gl.domElement
     const down = (e: PointerEvent): void => {
       povPointer.current = { down: true, x: e.clientX, y: e.clientY }
@@ -124,26 +137,30 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
     }
     const key = (e: KeyboardEvent): void => {
       if (e.key === 'f' || e.key === 'F') {
-        pov.current.yawOff = 0
-        pov.current.pitchOff = 0
+        if (!(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLSelectElement)) useUiStore.getState().resetPov()
       }
     }
     dom.addEventListener('pointerdown', down)
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    window.addEventListener('blur', up)
     window.addEventListener('keydown', key)
     return () => {
       dom.removeEventListener('pointerdown', down)
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      window.removeEventListener('blur', up)
       window.removeEventListener('keydown', key)
+      up()
     }
-  }, [cameraMode, gl])
+  }, [cameraMode, gl, modal])
 
   useFrame((_, dt) => {
     const controls = controlsRef.current
 
-    // FOV：第一人称用接近真人视野的广角（垂直 75° ≈ 水平 105°），轨道模式 50°
+    // 屏幕垂直 FOV：第一人称 75°，轨道模式 50°，水平范围随容器比例变化。
     const targetFov = cameraMode === 'pov' ? 75 : 50
     if (Math.abs(camera.fov - targetFov) > 0.01) {
       camera.fov = clamp(camera.fov + (targetFov - camera.fov) * (1 - Math.exp(-6 * dt)), 20, 110)
@@ -220,11 +237,11 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      enabled={cameraMode === 'orbit' && !dragging && !busy}
+      enabled={cameraMode === 'orbit' && !dragging && !busy && !modal}
       enableDamping
       dampingFactor={0.08}
       minDistance={3}
-      maxDistance={45}
+      maxDistance={90}
       maxPolarAngle={Math.PI / 2 - 0.04}
       target={[0, 1.2, 4.5]}
     />
