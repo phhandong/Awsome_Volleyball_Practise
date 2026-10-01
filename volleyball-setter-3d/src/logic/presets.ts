@@ -92,8 +92,8 @@ const STYLE_SPECS: StyleSpec[] = [
     id: 't2',
     apexDeltas: [0, 0.3],
     variants: [
-      { name: '三号位半高', contactH: 2.8, apexH: 3.3, stand: [1.6, 0.1], target: (s, a) => add(s, mul(toward(s, a), 1.35)) },
-      { name: '二号位半高', contactH: 2.78, apexH: 3.28, stand: [1.6, 0.4], target: (s) => ({ x: s.x + 0.3, z: Math.max(0.6, s.z - 1.35) }) },
+      { name: '近身半高', contactH: 2.8, apexH: 3.3, stand: [1.6, 0.1], target: (s, a) => add(s, mul(toward(s, a), 1.35)) },
+      { name: '右侧半高', contactH: 2.78, apexH: 3.28, stand: [1.6, 0.4], target: (s) => ({ x: s.x + 0.3, z: Math.max(0.6, s.z - 1.35) }) },
     ],
   },
   {

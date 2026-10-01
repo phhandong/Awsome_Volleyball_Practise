@@ -16,13 +16,13 @@ export function PovHud() {
     <div className="pov-hud">
       <div className="pov-crosshair" />
       <div className="pov-card">
-        <div className="pov-title">二传视角</div>
+        <div className="pov-title">二传第一人称</div>
         {traj ? (
           <>
             <div>飞行时间 {traj.flightT.toFixed(2)}s</div>
             <div>球速 {traj.speed.toFixed(1)} m/s · 仰角 {traj.elevDeg.toFixed(0)}°</div>
             <div>
-              目标 {ZONE_NAMES[zoneOf(params.target.x, params.target.z)]} · 击球高 {params.contactH.toFixed(2)}m
+              目标区域 {ZONE_NAMES[zoneOf(params.target.x, params.target.z)]} · 击球高 {params.contactH.toFixed(2)}m
             </div>
           </>
         ) : (

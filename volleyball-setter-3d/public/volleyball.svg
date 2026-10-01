@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">黄蓝排球 · 排球进攻战术板</title>
+  <defs>
+    <clipPath id="ball"><circle cx="128" cy="128" r="120"/></clipPath>
+    <radialGradient id="gold" cx="34%" cy="24%" r="83%">
+      <stop stop-color="#ffe05a"/>
+      <stop offset=".42" stop-color="#ffd020"/>
+      <stop offset=".76" stop-color="#efb508"/>
+      <stop offset="1" stop-color="#a76905"/>
+    </radialGradient>
+    <radialGradient id="blue" gradientUnits="userSpaceOnUse" cx="63" cy="90" r="174">
+      <stop stop-color="#3165c0"/>
+      <stop offset=".38" stop-color="#163c93"/>
+      <stop offset=".72" stop-color="#091f65"/>
+      <stop offset="1" stop-color="#031236"/>
+    </radialGradient>
+    <radialGradient id="light" cx="31%" cy="20%" r="72%">
+      <stop stop-color="#fff" stop-opacity=".17"/>
+      <stop offset=".58" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".14"/>
+    </radialGradient>
+    <pattern id="dimples" width="7" height="7" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r=".9" fill="#071d44" opacity=".12"/>
+      <path d="M1.2 2.9Q2 3.6 2.8 2.9" fill="none" stroke="#fff" stroke-width=".65" opacity=".2"/>
+    </pattern>
+  </defs>
+  <g clip-path="url(#ball)">
+    <circle cx="128" cy="128" r="120" fill="url(#gold)"/>
+    <g fill="url(#blue)">
+      <path d="M116 3C89 15 68 36 49 63C32 88 24 111 17 133C12 146 15 161 23 179L3 155L1 108C20 54 54 20 101 4Z"/>
+      <path d="M49 63C64 84 93 91 130 86C173 80 203 96 221 132C229 150 224 167 209 181C198 153 178 143 146 147C104 154 61 143 41 108C29 88 36 74 49 63Z"/>
+      <path d="M229 51C248 74 259 107 252 137C249 151 237 156 224 158L215 137C234 130 244 116 241 95C239 77 233 62 229 51Z"/>
+      <path d="M220 132C232 145 231 161 221 179C201 211 179 233 145 251L136 247C164 226 191 206 209 181C221 165 225 149 220 132Z"/>
+    </g>
+    <g fill="none" stroke-linecap="round">
+      <g stroke="#b78408" stroke-width="1.15" opacity=".34">
+        <path d="M111 8C132 15 155 25 171 33C174 50 169 72 157 86"/>
+        <path d="M171 33C196 34 218 45 237 66"/>
+        <path d="M104 151C94 171 90 195 85 222"/>
+        <path d="M38 173C45 201 63 216 85 222C116 231 151 234 178 229"/>
+      </g>
+      <g stroke="#020e35" stroke-width="1.25" opacity=".36">
+        <path d="M22 92C31 87 39 83 49 82"/>
+        <path d="M41 108C36 96 35 88 36 81"/>
+        <path d="M214 125C219 143 222 157 218 169"/>
+      </g>
+      <path d="M49 63C64 84 93 91 130 86C173 80 203 96 221 132" stroke="#fff" stroke-width=".8" opacity=".16"/>
+    </g>
+    <circle cx="128" cy="128" r="120" fill="url(#dimples)"/>
+    <circle cx="128" cy="128" r="120" fill="url(#light)"/>
+  </g>
+  <circle cx="128" cy="128" r="119.6" fill="none" stroke="#715012" stroke-opacity=".32" stroke-width=".8"/>
+</svg>

@@ -65,6 +65,16 @@ body {
   gap: 12px;
 }
 
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo {
+  flex: 0 0 38px;
+}
+
 .panel-head h1 {
   margin: 0;
   font-size: 19px;

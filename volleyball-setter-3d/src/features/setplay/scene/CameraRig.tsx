@@ -19,7 +19,7 @@ const easeOut = (k: number): number => 1 - (1 - k) ** 3
 const easeInOut = (k: number): number => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2)
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v))
 
-/** 相机系统：轨道模式（预设机位阻尼过渡）+ 二传第一人称（真人视野 FOV、跟球/环视） */
+/** 相机系统：轨道模式（预设机位阻尼过渡）+ 二传第一人称（屏幕视角、跟球/环视） */
 export function CameraRig({ flightT, attackT }: { flightT: number; attackT: number }) {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
   const gl = useThree((s) => s.gl)

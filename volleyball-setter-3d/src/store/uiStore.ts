@@ -27,7 +27,7 @@ export const useUiStore = create<UiState>((set) => ({
   showQuality: true,
 
   setCameraMode: (cameraMode) => set({ cameraMode }),
-  setPreset: (viewPreset) => set((s) => ({ viewPreset, viewNonce: s.viewNonce + 1 })),
+  setPreset: (viewPreset) => set((s) => ({ cameraMode: 'orbit', viewPreset, viewNonce: s.viewNonce + 1 })),
   setDragging: (dragging) => set({ dragging }),
   setShowQuality: (showQuality) => set({ showQuality }),
 }))

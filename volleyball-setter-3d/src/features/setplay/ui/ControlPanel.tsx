@@ -110,8 +110,11 @@ export function ControlPanel() {
   return (
     <div className="panel-inner">
       <header className="panel-head">
-        <h1>排球二传战术板</h1>
-        <p>3D 传球路线设计 · 第一版</p>
+        <img className="brand-logo" src={`${import.meta.env.BASE_URL}volleyball.svg?v=2`} width="38" height="38" alt="" aria-hidden="true" />
+        <div>
+        <h1>排球进攻战术板</h1>
+        <p>3D 二传与攻手排练</p>
+        </div>
       </header>
 
       <section className="sec">
@@ -158,7 +161,7 @@ export function ControlPanel() {
             ['快攻', 2.55],
             ['标准', 2.8],
             ['超手', 3.05],
-            ['后排', 3.25],
+            ['高点', 3.25],
           ] as const).map(([name, v]) => (
             <button
               key={name}
@@ -267,7 +270,7 @@ export function ControlPanel() {
       </section>
 
       <section className="sec">
-        <h3>传球质量检查</h3>
+        <h3>传球与助跑检查</h3>
         {qualityReport ? (
           <>
             <div className={`q-score q-score-${qualityReport.level}`}>
@@ -337,7 +340,7 @@ export function ControlPanel() {
         </div>
         <label className="check-row">
           <input type="checkbox" checked={showZones} onChange={(e) => setShowZones(e.target.checked)} />
-          显示号位标注
+          显示场地区域标注
         </label>
       </section>
 
@@ -373,7 +376,7 @@ export function ControlPanel() {
           </select>
         </label>)}
         <button className="btn wide-btn" onClick={resetFormation}>
-          重置默认站位
+          重置默认阵型
         </button>
       </section>
 

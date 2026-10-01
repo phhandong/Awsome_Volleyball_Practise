@@ -6,6 +6,7 @@ import { useUiStore } from './store/uiStore'
 
 function App() {
   const setCameraMode = useUiStore((s) => s.setCameraMode)
+  const cameraMode = useUiStore((s) => s.cameraMode)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -24,7 +25,9 @@ function App() {
         <Scene3D />
         <PovHud />
         <div className="stage-hint">
-          左键拖动旋转 · 滚轮缩放 · 右键平移 · 拖拽球员与黄色目标环调整站位
+          {cameraMode === 'pov'
+            ? '拖动环视 · F 回正看球 · Esc 退出二传视角'
+            : '左键拖动旋转 · 滚轮缩放 · 右键平移 · 拖拽球员与目标环调整站位'}
         </div>
       </main>
     </div>

@@ -44,9 +44,9 @@ export function RouteList() {
                 </span>
                 <span className="route-metrics">
                   {c.metrics.flightT.toFixed(2)}s · {c.metrics.speed.toFixed(1)}m/s · 弧顶{' '}
-                  {c.metrics.apexY.toFixed(2)}m · 助跑{' '}
+                  {c.metrics.apexY.toFixed(2)}m · 起点距目标{' '}
                   {Math.hypot(c.stand.x - c.params.target.x, c.stand.z - c.params.target.z).toFixed(1)}m ·{' '}
-                  {ZONE_NAMES[zoneOf(c.params.target.x, c.params.target.z)]}
+                  目标{ZONE_NAMES[zoneOf(c.params.target.x, c.params.target.z)]}
                 </span>
               </button>
             ))}
