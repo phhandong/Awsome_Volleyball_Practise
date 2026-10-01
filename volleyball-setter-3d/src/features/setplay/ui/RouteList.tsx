@@ -5,18 +5,15 @@ import { ZONE_NAMES, zoneOf } from '../../../logic/court'
 
 /** 五风格推荐方案列表：每风格展示 Top3，点击即套用预览 */
 export function RouteList() {
-  const players = useSceneStore((s) => s.players)
-  const setterId = useSceneStore((s) => s.setterId)
-  const attackerId = useSceneStore((s) => s.attackerId)
+  const setter = useSceneStore((s) => s.recommendationPlayers.find(p => p.id === s.setterId))
+  const attacker = useSceneStore((s) => s.recommendationPlayers.find(p => p.id === s.attackerId))
   const selectedId = useSceneStore((s) => s.selectedCandidateId)
   const applyCandidate = useSceneStore((s) => s.applyCandidate)
 
   const routes = useMemo(() => {
-    const setter = players.find((p) => p.id === setterId)
-    const attacker = players.find((p) => p.id === attackerId)
     if (!setter || !attacker) return null
     return generateRoutes(setter, attacker)
-  }, [players, setterId, attackerId])
+  }, [setter, attacker])
 
   if (!routes) return null
 
@@ -35,6 +32,8 @@ export function RouteList() {
             {list.map((c) => (
               <button
                 key={c.id}
+                data-route-id={c.id}
+                aria-pressed={selectedId === c.id}
                 className={`route-card${selectedId === c.id ? ' selected' : ''}`}
                 onClick={() => applyCandidate(c)}
               >

@@ -30,7 +30,7 @@ export interface RouteCandidate {
   color: string
   score: number
   parts: { offNet: number; reach: number; elevation: number; arc: number }
-  params: { target: Vec2; contactH: number; apexH: number }
+  params: { target: Vec2; contactH: number; apexH: number; releaseH: number }
   /** 选中该方案时攻手的助跑站位 */
   stand: Vec2
   metrics: {
@@ -194,7 +194,7 @@ export function generateRoutes(setter: PlayerState, attacker: PlayerState): Reco
           styleName: style.name,
           variantName: variant.name,
           color: style.color,
-          params: { target, contactH: variant.contactH, apexH },
+          params: { target, contactH: variant.contactH, apexH, releaseH: 2.2 },
           stand,
           metrics: {
             flightT: t.flightT,

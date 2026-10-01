@@ -5,6 +5,8 @@ import { DEFAULT_FORMATION } from '../logic/court'
 
 interface SceneState {
   players: PlayerState[]
+  /** 本次推荐的站位依据；套用方案的自动站位不反向改写推荐。仅运行时使用。 */
+  recommendationPlayers: PlayerState[]
   setterId: string
   attackerId: string
   params: RouteParams
@@ -52,8 +54,18 @@ function clampTarget(p: { x: number; z: number }): { x: number; z: number } {
   }
 }
 
+function recommendationBasis(s: SceneState, players: PlayerState[], changedIds: string[]): PlayerState[] {
+  if (changedIds.includes(s.setterId) || changedIds.includes(s.attackerId)) return players
+  return s.recommendationPlayers.map(p => changedIds.includes(p.id) ? players.find(next => next.id === p.id) ?? p : p)
+}
+
+function affectsRecommendation(s: SceneState, changedIds: string[]): boolean {
+  return changedIds.includes(s.setterId) || changedIds.includes(s.attackerId)
+}
+
 export const useSceneStore = create<SceneState>((set) => ({
   players: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
+  recommendationPlayers: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
   setterId: 'p1',
   attackerId: 'p2',
   params: { ...DEFAULT_PARAMS, target: { ...DEFAULT_PARAMS.target } },
@@ -64,13 +76,22 @@ export const useSceneStore = create<SceneState>((set) => ({
   showZones: true,
   approachDist: 2.4,
 
-  setParams: (partial) => set((s) => ({ params: { ...s.params, ...partial } })),
+  setParams: (partial) => set((s) => {
+    const changed = Object.entries(partial).some(([key, value]) => key === 'target'
+      ? (value as Vec2).x !== s.params.target.x || (value as Vec2).z !== s.params.target.z
+      : value !== s.params[key as keyof RouteParams])
+    return changed ? { params: { ...s.params, ...partial }, selectedCandidateId: null } : {}
+  }),
   setTarget: (pos) =>
-    set((s) => ({ params: { ...s.params, target: pos }, selectedCandidateId: null, selectedStyle: null })),
+    set((s) => pos.x === s.params.target.x && pos.z === s.params.target.z ? {} : ({
+      params: { ...s.params, target: pos }, selectedCandidateId: null, selectedStyle: null,
+    })),
   setPlayerPos: (id, pos) =>
     set((s) => {
       const prev = s.players.find((p) => p.id === id)
+      if (!prev || (prev.pos.x === pos.x && prev.pos.z === pos.z)) return {}
       const players = s.players.map((p) => (p.id === id ? { ...p, pos } : p))
+      const recommendationPlayers = recommendationBasis(s, players, [id])
       // 攻手移动时，击球点随攻手平移（保持相对偏移）
       if (prev && id === s.attackerId && (prev.pos.x !== pos.x || prev.pos.z !== pos.z)) {
         const newTarget = clampTarget({
@@ -79,6 +100,7 @@ export const useSceneStore = create<SceneState>((set) => ({
         })
         return {
           players,
+          recommendationPlayers,
           params: {
             ...s.params,
             target: newTarget,
@@ -87,25 +109,34 @@ export const useSceneStore = create<SceneState>((set) => ({
           selectedCandidateId: null,
         }
       }
-      return { players }
+      return { players, recommendationPlayers,
+        ...(affectsRecommendation(s, [id]) ? { selectedCandidateId: null } : {}),
+      }
     }),
   setPlayerZone: (id, zone) => set((s) => {
     const current = s.players.find(p => p.id === id)
-    if (!current) return {}
+    if (!current || current.rotationZone === zone) return {}
+    const changedIds = s.players.filter(p => p.id === id || p.rotationZone === zone).map(p => p.id)
     // 交换号位，保持本轮六人各占一个轮转位置。
-    return { players: s.players.map(p => p.id === id ? { ...p, rotationZone: zone }
-      : p.rotationZone === zone ? { ...p, rotationZone: current.rotationZone } : p) }
+    const players = s.players.map(p => p.id === id ? { ...p, rotationZone: zone }
+      : p.rotationZone === zone ? { ...p, rotationZone: current.rotationZone } : p)
+    return { players, recommendationPlayers: recommendationBasis(s, players, changedIds),
+      ...(affectsRecommendation(s, changedIds) ? { selectedCandidateId: null } : {}),
+    }
   }),
-  setSetter: (id) => set({ setterId: id }),
+  setSetter: (id) => set(s => id === s.setterId || !s.players.some(p => p.id === id) ? {} : ({
+    setterId: id, recommendationPlayers: s.players, selectedCandidateId: null, selectedStyle: null,
+  })),
   setAttacker: (id) =>
     set((s) => {
       if (id === s.attackerId) return { attackerId: id }
       const old = s.players.find((p) => p.id === s.attackerId)
       const next = s.players.find((p) => p.id === id)
-      if (!old || !next) return { attackerId: id }
+      if (!old || !next) return {}
       // 切换攻手时，击球点同样重新锚定到新攻手附近（保持相对偏移）
       return {
         attackerId: id,
+        recommendationPlayers: s.players,
         params: {
           ...s.params,
           target: clampTarget({
@@ -114,6 +145,7 @@ export const useSceneStore = create<SceneState>((set) => ({
           }),
         },
         selectedCandidateId: null,
+        selectedStyle: null,
       }
     }),
   applyCandidate: (c) =>
@@ -126,6 +158,7 @@ export const useSceneStore = create<SceneState>((set) => ({
         apexH: c.params.apexH,
         target: { ...c.params.target },
         contactH: c.params.contactH,
+        releaseH: c.params.releaseH,
       },
       // 攻手随所选球种移动到对应的助跑站位
       players: s.players.map((p) => (p.id === s.attackerId ? { ...p, pos: { ...c.stand } } : p)),
@@ -133,10 +166,13 @@ export const useSceneStore = create<SceneState>((set) => ({
       selectedCandidateId: c.id,
       selectedStyle: c.styleId,
     })),
-  clearCandidate: () => set({ selectedCandidateId: null }),
+  clearCandidate: () => set({ selectedCandidateId: null, selectedStyle: null }),
   resetFormation: () =>
     set({
       players: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
+      recommendationPlayers: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
+      selectedCandidateId: null,
+      selectedStyle: null,
     }),
   setQuality: (quality) => set({ quality }),
   setTheme: (theme) => set({ theme }),
@@ -155,9 +191,12 @@ export const useSceneStore = create<SceneState>((set) => ({
       }
       const len = Math.hypot(dx, dz) || 1
       const pos = clampTarget({ x: t.x + (dx / len) * d, z: t.z + (dz / len) * d })
+      const players = s.players.map((p) => (p.id === s.attackerId ? { ...p, pos } : p))
       return {
         approachDist: d,
-        players: s.players.map((p) => (p.id === s.attackerId ? { ...p, pos } : p)),
+        players,
+        recommendationPlayers: players,
+        selectedCandidateId: null,
       }
     }),
 }))
@@ -201,6 +240,7 @@ export function importScene(json: string): string | null {
     if (!['front', 'back'].includes(params.setDirection)) return '传球方式必须为正传或背传' 
     useSceneStore.setState({
       players,
+      recommendationPlayers: players,
       setterId: data.setterId ?? data.players[0].id,
       attackerId: data.attackerId ?? data.players[0].id,
       params,
