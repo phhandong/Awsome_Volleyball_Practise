@@ -1,4 +1,4 @@
-# 排球进攻战术板 · 3D 二传与攻手排练
+# 排球进攻战术板
 
 网页端 3D 排球战术工具：以二传视角设计传球路线，内置一/二/三/负节奏与背传五种风格的推荐方案。
 架构参考 [sunny30119/volleyball-tactics](https://github.com/sunny30119/volleyball-tactics)（Vite + React + three/R3F + zustand，逻辑/呈现分离，参数化抛物线闭式解）。

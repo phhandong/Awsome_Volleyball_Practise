@@ -152,20 +152,20 @@ export function makeBallTexture(): THREE.Texture {
   })
 }
 
-/** 号码贴图（白字描边，透明底） */
-export function makeNumberTexture(num: number): THREE.Texture {
-  return cached(`num-${num}`, () => {
-    const { c, ctx } = canvas(256, 256)
-    ctx.clearRect(0, 0, 256, 256)
-    ctx.font = '900 168px "Arial Black", "Microsoft YaHei", sans-serif'
+/** 球员职能贴图（白字描边，透明底） */
+export function makeRoleTexture(role: string): THREE.Texture {
+  return cached(`role-${role}`, () => {
+    const { c, ctx } = canvas(512, 128)
+    ctx.clearRect(0, 0, 512, 128)
+    ctx.font = '700 92px "Microsoft YaHei", sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
     ctx.lineJoin = 'round'
-    ctx.strokeStyle = 'rgba(10, 14, 26, 0.6)'
-    ctx.lineWidth = 18
-    ctx.strokeText(String(num), 128, 138)
+    ctx.strokeStyle = 'rgba(10, 14, 26, 0.9)'
+    ctx.lineWidth = 10
+    ctx.strokeText(role, 256, 68)
     ctx.fillStyle = '#f5f7fa'
-    ctx.fillText(String(num), 128, 138)
+    ctx.fillText(role, 256, 68)
     return toTexture(c)
   })
 }

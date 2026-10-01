@@ -64,8 +64,8 @@ export const ZONE_NAMES: Record<ZoneId, string> = {
 
 export const ROLE_NAMES: Record<string, string> = {
   S: '二传',
-  OH: '主攻',
-  MB: '副攻',
+  OH: '主攻手',
+  MB: '副攻手',
   OP: '接应',
   L: '自由人',
 }
@@ -73,9 +73,9 @@ export const ROLE_NAMES: Record<string, string> = {
 /** 默认 5-1 阵型（二传在前排 2 号位插上的轮次快照；主攻站位含助跑距离） */
 export const DEFAULT_FORMATION: PlayerState[] = [
   { id: 'p1', rotationZone: 2, number: 10, role: 'S', name: '二传', pos: { x: 0.7, z: 1.6 } },
-  { id: 'p2', rotationZone: 4, number: 8, role: 'OH', name: '主攻', pos: { x: 3.3, z: 7.65 } },
-  { id: 'p3', rotationZone: 3, number: 6, role: 'MB', name: '副攻', pos: { x: 1.0, z: 4.5 } },
+  { id: 'p2', rotationZone: 4, number: 8, role: 'OH', name: '主攻手', pos: { x: 3.3, z: 7.65 } },
+  { id: 'p3', rotationZone: 3, number: 6, role: 'MB', name: '副攻手', pos: { x: 1.0, z: 4.5 } },
   { id: 'p4', rotationZone: 1, number: 12, role: 'OP', name: '接应', pos: { x: 4.6, z: 1.3 } },
-  { id: 'p5', rotationZone: 5, number: 9, role: 'OH', name: '主攻', pos: { x: 4.6, z: 7.6 } },
+  { id: 'p5', rotationZone: 5, number: 9, role: 'OH', name: '主攻手', pos: { x: 4.6, z: 7.6 } },
   { id: 'p6', rotationZone: 6, number: 2, role: 'L', name: '自由人', pos: { x: 6.2, z: 4.5 } },
 ]

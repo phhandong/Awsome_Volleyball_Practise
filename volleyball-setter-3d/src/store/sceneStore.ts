@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import type { CourtTheme, PlayerState, Quality, RouteParams, Vec2, ZoneId } from '../types'
 import type { RouteCandidate, StyleId } from '../logic/presets'
 import { DEFAULT_FORMATION } from '../logic/court'
+import { clearApproachLane } from '../logic/formationSpacing'
 
 interface SceneState {
   players: PlayerState[]
@@ -63,7 +64,20 @@ function affectsRecommendation(s: SceneState, changedIds: string[]): boolean {
   return changedIds.includes(s.setterId) || changedIds.includes(s.attackerId)
 }
 
-export const useSceneStore = create<SceneState>((set) => ({
+export const useSceneStore = create<SceneState>((rawSet) => {
+  // 一次状态更新内完成站位避让，场景、面板、存档读取同一阵型。
+  const set = (update: Partial<SceneState> | ((s: SceneState) => Partial<SceneState>)) => rawSet(s => {
+    const patch = typeof update === 'function' ? update(s) : update
+    const next = { ...s, ...patch }
+    if (next.players === s.players && next.params === s.params
+      && next.setterId === s.setterId && next.attackerId === s.attackerId) return patch
+    const players = clearApproachLane(next.players, next.setterId, next.attackerId, next.params)
+    if (players === next.players) return patch
+    return { ...patch, players,
+      ...(patch.recommendationPlayers === next.players ? { recommendationPlayers: players } : {}),
+    }
+  })
+  return ({
   players: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
   recommendationPlayers: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
   setterId: 'p1',
@@ -167,13 +181,15 @@ export const useSceneStore = create<SceneState>((set) => ({
       selectedStyle: c.styleId,
     })),
   clearCandidate: () => set({ selectedCandidateId: null, selectedStyle: null }),
-  resetFormation: () =>
+  resetFormation: () => {
+    const players = DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } }))
     set({
-      players: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
-      recommendationPlayers: DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } })),
+      players,
+      recommendationPlayers: players,
       selectedCandidateId: null,
       selectedStyle: null,
-    }),
+    })
+  },
   setQuality: (quality) => set({ quality }),
   setTheme: (theme) => set({ theme }),
   setShowZones: (showZones) => set({ showZones }),
@@ -199,7 +215,8 @@ export const useSceneStore = create<SceneState>((set) => ({
         selectedCandidateId: null,
       }
     }),
-}))
+  })
+})
 
 /** 导出当前局面为可序列化 JSON */
 export function exportScene(): string {
@@ -238,11 +255,14 @@ export function importScene(json: string): string | null {
     const params = { ...DEFAULT_PARAMS, ...(data.params ?? {}) }
     if (![2, 3, 4].includes(params.approachSteps)) return '助跑步数必须为 2、3 或 4'
     if (!['front', 'back'].includes(params.setDirection)) return '传球方式必须为正传或背传' 
+    const setterId = data.setterId ?? players[0].id
+    const attackerId = data.attackerId ?? players[0].id
+    const arrangedPlayers = clearApproachLane(players, setterId, attackerId, params)
     useSceneStore.setState({
-      players,
-      recommendationPlayers: players,
-      setterId: data.setterId ?? data.players[0].id,
-      attackerId: data.attackerId ?? data.players[0].id,
+      players: arrangedPlayers,
+      recommendationPlayers: arrangedPlayers,
+      setterId,
+      attackerId,
       params,
       theme: data.theme === 'blue' ? 'blue' : 'wood',
       selectedCandidateId: null,

@@ -339,7 +339,7 @@ export function ControlPanel() {
             <select value={setterId} onChange={(e) => setSetter(e.target.value)}>
               {players.map((p) => (
                 <option key={p.id} value={p.id}>
-                  #{p.number} {ROLE_NAMES[p.role]}
+                  {ROLE_NAMES[p.role]}（{p.rotationZone}号位）
                 </option>
               ))}
             </select>
@@ -349,7 +349,7 @@ export function ControlPanel() {
             <select value={attackerId} onChange={(e) => setAttacker(e.target.value)}>
               {players.map((p) => (
                 <option key={p.id} value={p.id}>
-                  #{p.number} {ROLE_NAMES[p.role]}
+                  {ROLE_NAMES[p.role]}（{p.rotationZone}号位）
                 </option>
               ))}
             </select>
@@ -357,8 +357,9 @@ export function ControlPanel() {
         </div>
         <p className="hint-text">场上可直接拖拽球员调整布阵；黄色环为二传、蓝色环为当前攻手。</p>
         <div className="hint-text">本轮号位决定前后排身份，拖动和助跑不会改变身份。</div>
-        {players.map(p => <label className="select-row" key={p.id}>#{p.number} {p.name}
-          <select aria-label={`#${p.number}轮转号位`} value={p.rotationZone} onChange={e => setPlayerZone(p.id, Number(e.target.value) as ZoneId)}>
+        <div className="hint-text">其他队员会就近让出攻手的助跑与落地区域。</div>
+        {players.map(p => <label className="select-row" key={p.id}>{ROLE_NAMES[p.role]}
+          <select aria-label={`${ROLE_NAMES[p.role]}（${p.rotationZone}号位）轮转号位`} value={p.rotationZone} onChange={e => setPlayerZone(p.id, Number(e.target.value) as ZoneId)}>
             {([1, 2, 3, 4, 5, 6] as const).map(zone => <option key={zone} value={zone}>{zone}号位 · {isBackRow(zone) ? '后排' : '前排'}</option>)}
           </select>
         </label>)}

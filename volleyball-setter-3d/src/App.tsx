@@ -75,7 +75,7 @@ function App() {
         <div className="panel-shell">
           <header className="panel-head">
             <img className="brand-logo" src={`${import.meta.env.BASE_URL}volleyball.svg?v=2`} width="38" height="38" alt="" aria-hidden="true" />
-            <div className="brand-copy"><h1 id="app-title">排球进攻战术板</h1><p>3D 二传与攻手排练</p></div>
+            <div className="brand-copy"><h1 id="app-title">排球进攻战术板</h1></div>
             <button ref={closeRef} className="btn panel-close" onClick={closePanel} aria-label={compact ? '关闭参数面板' : '收起参数面板'} title={compact ? '关闭参数面板' : '收起参数面板'}>‹</button>
           </header>
           <div className="panel-scroll"><ControlPanel /></div>

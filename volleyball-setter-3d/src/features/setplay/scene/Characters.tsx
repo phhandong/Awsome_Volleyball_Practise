@@ -8,7 +8,9 @@ import { useSceneStore } from '../../../store/sceneStore'
 import { useUiStore } from '../../../store/uiStore'
 import { playback } from '../animation'
 import { beginGroundDrag, clampToCourt } from './dragManager'
-import { makeNumberTexture } from './textures'
+import { makeRoleTexture } from './textures'
+import { ROLE_NAMES } from '../../../logic/court'
+import { createJerseyLabelSurface, TORSO_PROFILE } from '../../../logic/jerseyLabel'
 import { planAttacker, RIG, sampleAttacker, type AttackerFrame } from './attackerMotion'
 import {
   copyPose,
@@ -30,18 +32,7 @@ const SOLE = '#2b3140'
 const KNEEPAD = '#dfe3ec'
 const SOCK = '#f2f4f8'
 
-/** 躯干车削轮廓（半径, 高度）：腰部收窄、胸肩加宽的运动员体格 */
-const TORSO_PROFILE = [
-  [0.105, 0],
-  [0.128, 0.045],
-  [0.142, 0.13],
-  [0.155, 0.24],
-  [0.16, 0.33],
-  [0.147, 0.4],
-  [0.095, 0.46],
-  [0.06, 0.49],
-  [0.056, 0.51],
-].map(([x, y]) => new THREE.Vector2(x, y))
+const TORSO_POINTS = TORSO_PROFILE.map(([x, y]) => new THREE.Vector2(x, y))
 
 type HairStyle = 'crop' | 'bun' | 'band'
 const HAIR_STYLES: HairStyle[] = ['crop', 'bun', 'band', 'crop', 'bun', 'crop']
@@ -97,6 +88,7 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
   const facing = useRef<THREE.Group>(null)
   const body = useRef<THREE.Group>(null)
   const torso = useRef<THREE.Group>(null)
+  const roleLabel = useRef<THREE.Group>(null)
   const shoulderL = useRef<THREE.Group>(null)
   const shoulderR = useRef<THREE.Group>(null)
   const elbowL = useRef<THREE.Group>(null)
@@ -116,7 +108,16 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
   const hairStyle = HAIR_STYLES[index % HAIR_STYLES.length]
   const libero = player.role === 'L'
   const jersey = libero ? JERSEY_LIBERO : JERSEY
-  const numberTex = useMemo(() => makeNumberTexture(player.number), [player.number])
+  const roleTex = useMemo(() => makeRoleTexture(ROLE_NAMES[player.role]), [player.role])
+  const jerseyLabelGeometry = useMemo(() => {
+    const surface = createJerseyLabelSurface()
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(surface.positions, 3))
+    geometry.setAttribute('uv', new THREE.BufferAttribute(surface.uvs, 2))
+    geometry.setIndex(surface.indices)
+    geometry.computeVertexNormals()
+    return geometry
+  }, [])
 
   const current = useRef<Pose>(createScratchPose())
   const scratch = useRef<Pose>(createScratchPose())
@@ -170,6 +171,7 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
     }
     if (facing.current) facing.current.rotation.y = yawRef.current
     if (body.current) body.current.position.y = cur.rootY
+    if (roleLabel.current) roleLabel.current.position.y = 2.02 + cur.rootY
     if (torso.current) torso.current.rotation.x = cur.torso
     // 肢体均沿 -Y 方向生长：绕 X 轴 +角度 = 向身后摆，因此姿势定义的"向前"角度在应用时取反
     if (shoulderL.current) {
@@ -218,10 +220,10 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
             <meshStandardMaterial color={SHORTS} roughness={0.75} />
           </mesh>
 
-          {/* 躯干（车削曲面 + 三角肌 + 号码） */}
+          {/* 躯干（车削曲面 + 三角肌 + 职能名称） */}
           <group ref={torso} position={[0, RIG.torsoY, 0]}>
             <mesh castShadow>
-              <latheGeometry args={[TORSO_PROFILE, 28]} />
+              <latheGeometry args={[TORSO_POINTS, 28]} />
               <meshStandardMaterial color={jersey} roughness={0.68} />
             </mesh>
             <mesh castShadow position={[0.175, 0.435, 0]}>
@@ -232,14 +234,12 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
               <sphereGeometry args={[0.062, 14, 12]} />
               <meshStandardMaterial color={jersey} roughness={0.68} />
             </mesh>
-            {/* 胸前/背后号码 */}
-            <mesh position={[0, 0.3, 0.158]}>
-              <planeGeometry args={[0.14, 0.14]} />
-              <meshStandardMaterial map={numberTex} transparent roughness={0.7} polygonOffset polygonOffsetFactor={-1} />
+            {/* 胸前/背后职能名称 */}
+            <mesh geometry={jerseyLabelGeometry}>
+              <meshStandardMaterial map={roleTex} transparent roughness={0.7} polygonOffset polygonOffsetFactor={-1} />
             </mesh>
-            <mesh position={[0, 0.3, -0.158]} rotation-y={Math.PI}>
-              <planeGeometry args={[0.14, 0.14]} />
-              <meshStandardMaterial map={numberTex} transparent roughness={0.7} polygonOffset polygonOffsetFactor={-1} />
+            <mesh geometry={jerseyLabelGeometry} rotation-y={Math.PI}>
+              <meshStandardMaterial map={roleTex} transparent roughness={0.7} polygonOffset polygonOffsetFactor={-1} />
             </mesh>
 
             {/* 颈部 + 头（五官/发型/头带） */}
@@ -417,11 +417,11 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
         </mesh>
       ) : null}
 
-      {/* 头顶号码浮标 */}
-      <Billboard position={[0, 2.02, 0]}>
+      {/* 职能名称跟随起跳高度，并始终朝向相机 */}
+      <Billboard ref={roleLabel} position={[0, 2.02, 0]}>
         <mesh>
-          <planeGeometry args={[0.26, 0.26]} />
-          <meshBasicMaterial map={numberTex} transparent depthWrite={false} />
+          <planeGeometry args={[1.04, 0.26]} />
+          <meshBasicMaterial map={roleTex} transparent depthWrite={false} />
         </mesh>
       </Billboard>
     </group>
