@@ -68,7 +68,7 @@ function SceneContents() {
       {report && traj && attack && attackerPos && (
         <QualityOverlays report={report} pass={traj} attack={attack} attackerPos={attackerPos} target={params.target} />
       )}
-      <CameraRig flightT={traj ? traj.flightT : 1} attackT={attackT} />
+      <CameraRig />
     </>
   )
 }

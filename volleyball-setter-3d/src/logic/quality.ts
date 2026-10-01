@@ -3,6 +3,7 @@ import { isBackRow, COURT } from './court'
 import { BALL_RADIUS } from './rig'
 import type { Role, Trajectory, Vec2, ZoneId } from '../types'
 import type { StyleId } from './presets'
+import { attackSpace, NET_BODY_MARGIN, SETTER_CLEARANCE } from './motionSpace'
 
 /** 传球质量评估（纯函数）：依据教学/规则标准对当前方案做实时体检。 */
 
@@ -77,10 +78,9 @@ function dist2d(a: Vec2, b: Vec2): number {
   return Math.hypot(a.x - b.x, a.z - b.z)
 }
 
-/** 离网理想区：负节奏远网 / 后排攻 / 常规前排 */
-export function offNetBandOf(styleId: StyleId | null, attackerBackRow: boolean): [number, number] {
+/** 击球离网距离与轮转身份独立；后排是否合法由实际起跳脚判断。 */
+export function offNetBandOf(styleId: StyleId | null): [number, number] {
   if (styleId === 'neg') return [2.2, 4.6]
-  if (attackerBackRow) return [3.3, 7.2]
   return [0.5, 1.2]
 }
 
@@ -129,7 +129,7 @@ export function evaluateQuality(ctx: QualityContext): QualityReport {
   }
 
   // 1. 离网距离
-  const band = offNetBandOf(styleId, attackerBackRow)
+  const band = offNetBandOf(styleId)
   let offNet: QualityItem
   if (targetX >= band[0] && targetX <= band[1]) {
     offNet = {
@@ -140,7 +140,7 @@ export function evaluateQuality(ctx: QualityContext): QualityReport {
       level: 'ok',
       hint: '便于攻手完整助跑挥臂',
     }
-  } else if (targetX < 0.3 && !attackerBackRow) {
+  } else if (targetX < 0.3) {
     offNet = {
       key: 'offnet',
       label: '离网距离',
@@ -178,6 +178,18 @@ export function evaluateQuality(ctx: QualityContext): QualityReport {
     }
   }
   items.push(offNet)
+
+  const space = attackSpace(motion, setterPos)
+  items.push({ key: 'setterSpace', label: '攻手与二传空间',
+    value: `最近 ${space.setterDistance.toFixed(2)}m`,
+    band: `全程通道间距 ≥${SETTER_CLEARANCE.toFixed(2)}m（排练包络）`,
+    level: space.setterConflict ? 'bad' : 'ok',
+    hint: space.setterConflict ? `${space.setterPhase}通道与二传冲突，自动避让未找到可用路线；请移动二传或击球目标` : '助跑、腾空及落地制动通道均已避开二传' })
+  items.push({ key: 'netSpace', label: '攻手与球网空间',
+    value: `身体中心最近 ${space.netDistance.toFixed(2)}m`,
+    band: `身体中心距网 ≥${NET_BODY_MARGIN.toFixed(2)}m（排练包络）`,
+    level: space.netConflict ? 'bad' : 'ok',
+    hint: space.netConflict ? '动作通道与球网冲突，自动避让未找到可用路线；请将击球目标或助跑起点向后移' : '已为身体和落地制动预留网前空间' })
 
   // 质量检查直接使用动画计划：实际地面距离、时间、起跳脚与腾空速度。
   const delta = motion.timingDelta

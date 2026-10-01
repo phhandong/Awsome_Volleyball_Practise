@@ -656,7 +656,9 @@ select {
 .stage-blocked { pointer-events: none; }
 .stage-viewport { position: relative; min-height: 0; flex: 1; overflow: hidden; }
 .stage-viewport canvas { touch-action: none; }
-.stage-toolbar { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #233457; background: var(--panel); }
+.stage-toolbar { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #233457; background: var(--panel); }
+.pov-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; flex-basis: 100%; }
+.space-alert { flex: none; background: #44202b; color: #ffd0d5; padding: 8px 12px; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .stage-brand { color: var(--text-dim); font-size: 12px; letter-spacing: 2px; flex: 1; }
 .stage-actions { display: flex; gap: 6px; margin-left: auto; }
 .panel-trigger { border-color: #53613c; }

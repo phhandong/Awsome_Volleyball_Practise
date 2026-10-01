@@ -2,13 +2,14 @@ import { useEffect, useRef } from 'react'
 import { Scene3D } from './features/setplay/Scene3D'
 import { ControlPanel } from './features/setplay/ui/ControlPanel'
 import { PlaybackBar } from './features/setplay/ui/PlaybackBar'
-import { PovHud } from './features/setplay/ui/PovHud'
+import { PovHud, SpaceAlerts } from './features/setplay/ui/PovHud'
 import { useUiStore } from './store/uiStore'
 
 const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]'
 
 function App() {
   const cameraMode = useUiStore((s) => s.cameraMode)
+  const povLookMode = useUiStore((s) => s.povLookMode)
   const compact = useUiStore((s) => s.compact)
   const panelOpen = useUiStore((s) => s.panelOpen)
   const setPanelOpen = useUiStore((s) => s.setPanelOpen)
@@ -91,15 +92,20 @@ function App() {
             <button className={`btn${cameraMode === 'pov' ? ' active' : ''}`} onClick={() => useUiStore.getState().setCameraMode(cameraMode === 'pov' ? 'orbit' : 'pov')}>
               {cameraMode === 'pov' ? '退出二传视角' : '二传视角'}
             </button>
-            {cameraMode === 'pov' && <button className="btn" onClick={() => useUiStore.getState().resetPov()}>回正看球</button>}
           </div>
+          {cameraMode === 'pov' && <div className="pov-controls" role="group" aria-label="二传观察方式">
+            <button className={`btn${povLookMode === 'auto' ? ' active' : ''}`} aria-pressed={povLookMode === 'auto'} onClick={() => useUiStore.getState().setPovLookMode('auto')}>自动跟球</button>
+            <button className={`btn${povLookMode === 'free' ? ' active' : ''}`} aria-pressed={povLookMode === 'free'} onClick={() => useUiStore.getState().setPovLookMode('free')}>自由观察</button>
+            <button className="btn" onClick={() => useUiStore.getState().resetPov()}>回正看球</button>
+          </div>}
         </nav>
+        <SpaceAlerts />
         <div className="stage-viewport">
           <Scene3D />
           <PovHud />
           <div className="stage-hint">
             {cameraMode === 'pov'
-              ? compact ? '单指拖动环视 · 点“回正看球”恢复视线' : '拖动环视 · F 回正看球 · Esc 退出二传视角'
+              ? `${povLookMode === 'free' ? '自由观察，不自动转向球' : '自动跟随球的位置'} · ${compact ? '单指拖动环视' : '拖动环视 · F 回正 · Esc 退出'}`
               : compact ? '单指旋转 · 双指缩放 / 平移 · 拖动球员调整站位' : '左键旋转 · 滚轮缩放 · 右键平移 · 拖动球员与目标环调整站位'}
           </div>
         </div>

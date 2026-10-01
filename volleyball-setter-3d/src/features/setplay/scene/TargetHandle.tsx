@@ -39,7 +39,8 @@ export function TargetHandle({
     }
   })
 
-  const onDragStart = (e: { stopPropagation: () => void }): void => {
+  const onDragStart = (e: { button: number; stopPropagation: () => void }): void => {
+    if (e.button !== 0 || useUiStore.getState().cameraMode === 'pov') return
     e.stopPropagation()
     setDragging(true)
     beginGroundDrag(
@@ -53,7 +54,8 @@ export function TargetHandle({
   }
 
   // 拖拽击球点小球：仅改变高度
-  const onHeightDrag = (e: { stopPropagation: () => void }): void => {
+  const onHeightDrag = (e: { button: number; stopPropagation: () => void }): void => {
+    if (e.button !== 0 || useUiStore.getState().cameraMode === 'pov') return
     e.stopPropagation()
     setDragging(true)
     const origin = new THREE.Vector3(target.x, contactH, target.z)

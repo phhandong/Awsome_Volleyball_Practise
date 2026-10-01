@@ -1,7 +1,15 @@
 import { useUiStore } from '../../../store/uiStore'
 import { useSceneStore } from '../../../store/sceneStore'
-import { useSolution } from '../useSolution'
+import { useQuality, useSolution } from '../useSolution'
 import { ZONE_NAMES, zoneOf } from '../../../logic/court'
+
+/** 空间冲突常驻球场外层，折叠面板或关闭质量图例仍可见。 */
+export function SpaceAlerts() {
+  const report = useQuality()
+  const conflicts = report?.items.filter(i => (i.key === 'setterSpace' || i.key === 'netSpace') && i.level === 'bad') ?? []
+  if (!conflicts.length) return null
+  return <div className="space-alert" role="status">{conflicts.map(i => <div key={i.key}><strong>{i.label}冲突：</strong>{i.hint}</div>)}</div>
+}
 
 /** 二传第一人称 HUD：准星 + 参数卡 + 操作提示 */
 export function PovHud() {

@@ -51,6 +51,18 @@ export function sampleSetterPose(t: number, height: number, direction: SetDirect
   }
   return out
 }
+
+/** 与人物髋部、躯干、头和双眼的渲染层级共用坐标，按播放时间精确采样。 */
+export function sampleSetterView(pos: Vec2, target: Vec2, height: number, direction: SetDirection, t: number, out: Pose, hold = 0.6) {
+  const pose = sampleSetterPose(t, height, direction, out, hold)
+  const yaw = setterYaw(pos, target, direction)
+  const eye = rotateY(rotateX({ x: 0, y: RIG.headY + RIG.eyeY, z: RIG.eyeZ }, pose.torso), yaw)
+  eye.x += pos.x
+  eye.z += pos.z
+  eye.y += RIG.hipY + RIG.torsoY + pose.rootY
+  const forward = rotateY(rotateX({ x: 0, y: 0, z: 1 }, pose.torso), yaw)
+  return { eye, forward }
+}
 /** 举球前半段是可见的来球，随后从双手之间连续送出。 */
 export function sampleSetterBall(pos: Vec2, target: Vec2, height: number, direction: SetDirection, t: number, hold = 0.6): Vec3 {
   const ball = ballLocal(t, direction, hold)

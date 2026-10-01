@@ -5,8 +5,10 @@ import { OrbitControls } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useSceneStore } from '../../../store/sceneStore'
 import { useUiStore, type ViewPreset } from '../../../store/uiStore'
-import { ballWorld, phaseAt, playback } from '../animation'
+import { ballWorld, playback } from '../animation'
 import { fitCourtPosition } from '../../../logic/cameraFraming'
+import { sampleSetterView } from '../../../logic/setterMotion'
+import { createScratchPose } from './poses'
 
 const PRESETS: Record<ViewPreset, { pos: [number, number, number]; target: [number, number, number] }> = {
   coach: { pos: [13.5, 8.5, 12.5], target: [0, 1.2, 4.5] },
@@ -21,7 +23,7 @@ const easeInOut = (k: number): number => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2)
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v))
 
 /** 相机系统：轨道模式（预设机位阻尼过渡）+ 二传第一人称（屏幕视角、跟球/环视） */
-export function CameraRig({ flightT, attackT }: { flightT: number; attackT: number }) {
+export function CameraRig() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera
   const gl = useThree((s) => s.gl)
   const size = useThree((s) => s.size)
@@ -31,6 +33,7 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
   const dragging = useUiStore((s) => s.dragging)
   const modal = useUiStore((s) => s.compact && s.panelOpen)
   const povResetNonce = useUiStore((s) => s.povResetNonce)
+  const povLookMode = useUiStore((s) => s.povLookMode)
   const setter = useSceneStore((s) => s.players.find((p) => p.id === s.setterId)!)
   const params = useSceneStore((s) => s.params)
 
@@ -49,6 +52,9 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
   const pov = useRef({ yawOff: 0, pitchOff: 0 })
   const povPointer = useRef({ down: false, x: 0, y: 0 })
   const smoothLook = useRef(new THREE.Vector3(0, 2.5, 4.5))
+  const viewPose = useRef(createScratchPose())
+  const freeLook = useRef(new THREE.Vector3(0, 0, 1))
+  const lastView = useRef({ mode: cameraMode, setterId: setter.id, direction: params.setDirection })
 
   const tmp = useMemo(
     () => ({
@@ -99,7 +105,7 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
       trans.current = { t: 0, fromP: camera.position.clone(), fromQ: camera.quaternion.clone(), toPov: true }
       pov.current.yawOff = 0
       pov.current.pitchOff = 0
-      smoothLook.current.set(params.target.x, params.contactH, params.target.z)
+      smoothLook.current.copy(ballWorld)
     } else {
       const p = PRESETS[viewPreset]
       const position = viewPreset === 'coach' || viewPreset === 'top'
@@ -116,11 +122,26 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
     pov.current.pitchOff = 0
   }, [povResetNonce])
 
+  useEffect(() => {
+    const last = lastView.current
+    const entering = last.mode !== 'pov' && cameraMode === 'pov'
+    const actorChanged = last.setterId !== setter.id || last.direction !== params.setDirection
+    lastView.current = { mode: cameraMode, setterId: setter.id, direction: params.setDirection }
+    if (cameraMode !== 'pov') return
+    const view = sampleSetterView(setter.pos, params.target, params.releaseH, params.setDirection, playback.t, viewPose.current, playback.hold)
+    if (entering || actorChanged) freeLook.current.set(view.forward.x, view.forward.y, view.forward.z)
+    else if (povLookMode === 'free') camera.getWorldDirection(freeLook.current)
+    pov.current.yawOff = 0
+    pov.current.pitchOff = 0
+    smoothLook.current.copy(ballWorld)
+  }, [cameraMode, povLookMode, setter.id, setter.pos, params.setDirection, params.target, params.releaseH, camera])
+
   // 第一人称环视交互
   useEffect(() => {
     if (cameraMode !== 'pov' || modal) return
     const dom = gl.domElement
     const down = (e: PointerEvent): void => {
+      if (e.button !== 0 || !e.isPrimary) return
       povPointer.current = { down: true, x: e.clientX, y: e.clientY }
     }
     const move = (e: PointerEvent): void => {
@@ -182,16 +203,13 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
 
     // 第一人称
     if (cameraMode === 'pov') {
-      tmp.eye.set(setter.pos.x, 1.78, setter.pos.z)
-
-      // 视线目标：传球/击飞阶段跟球，其余看传球点
-      const ph = phaseAt(flightT, attackT, playback.t)
-      if (ph.kind === 'flight' || ph.kind === 'attack') tmp.look.copy(ballWorld)
-      else tmp.look.set(params.target.x, params.contactH, params.target.z)
-      smoothLook.current.lerp(tmp.look, 1 - Math.exp(-8 * dt))
-
-      // 基础视线方向 + 用户环视偏移
-      tmp.dir.subVectors(smoothLook.current, tmp.eye).normalize()
+      const view = sampleSetterView(setter.pos, params.target, params.releaseH, params.setDirection, playback.t, viewPose.current, playback.hold)
+      tmp.eye.set(view.eye.x, view.eye.y, view.eye.z)
+      if (povLookMode === 'auto') {
+        // 来球、出手、背传与扣球均看真实球位；背传接球时面向人物正前方。
+        smoothLook.current.lerp(ballWorld, 1 - Math.exp(-8 * dt))
+        tmp.dir.subVectors(smoothLook.current, tmp.eye).normalize()
+      } else tmp.dir.copy(freeLook.current)
       tmp.dir.applyAxisAngle(UP, pov.current.yawOff)
       tmp.right.crossVectors(tmp.dir, UP).normalize()
       tmp.dir.applyAxisAngle(tmp.right, pov.current.pitchOff)
@@ -210,7 +228,7 @@ export function CameraRig({ flightT, attackT }: { flightT: number; attackT: numb
           setBusy(false)
         }
       } else {
-        camera.position.lerp(tmp.eye, 1 - Math.exp(-14 * dt))
+        camera.position.copy(tmp.eye)
         camera.quaternion.slerp(tmp.desiredQ, 1 - Math.exp(-16 * dt))
       }
     }

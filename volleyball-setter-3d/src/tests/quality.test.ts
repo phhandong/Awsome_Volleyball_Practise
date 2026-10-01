@@ -70,15 +70,24 @@ describe('离网距离 band', () => {
   })
 
   it('负节奏使用远网标准区', () => {
-    expect(offNetBandOf('neg', false)).toEqual([2.2, 4.6])
-    expect(offNetBandOf(null, false)).toEqual([0.5, 1.2])
-    expect(offNetBandOf(null, true)).toEqual([3.3, 7.2])
+    expect(offNetBandOf('neg')).toEqual([2.2, 4.6])
+    expect(offNetBandOf(null)).toEqual([0.5, 1.2])
   })
 
-  it('后排攻手使用后场标准区', () => {
+  it('后排攻手与前排共用击球离网标准，后场远网球不再自动评优', () => {
     const r = evalFor({ target: { x: 4.2, z: 1.5 }, contactH: 3.0, apexH: 4.3, rotationZone: 1, attackerPos: { x: 4.6, z: 1.3 } })
-    expect(r.offNetBand).toEqual([3.3, 7.2])
-    expect(item(r, 'offnet').level).toBe('ok')
+    expect(r.offNetBand).toEqual([0.5, 1.2])
+    expect(item(r, 'offnet').level).toBe('bad')
+    expect(item(r, 'rule').level).toBe('ok')
+  })
+
+  it('前排与后排相同击球点得到相同距离评价，后排起跳违例独立标红', () => {
+    const opts = { target: { x: 1, z: 7 }, contactH: 2.85, attackerPos: { x: 4.6, z: 7 } }
+    const front = evalFor({ ...opts, rotationZone: 4 })
+    const back = evalFor({ ...opts, rotationZone: 1 })
+    expect(item(back, 'offnet')).toEqual(item(front, 'offnet'))
+    expect(item(back, 'offnet').level).toBe('ok')
+    expect(item(back, 'rule').level).toBe('bad')
   })
 })
 

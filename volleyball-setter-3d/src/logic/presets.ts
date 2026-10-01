@@ -1,6 +1,7 @@
 import { setterRelease } from './setterMotion'
 import type { PlayerState, SolveResult, Vec2 } from '../types'
-import { COURT, isBackRow } from './court'
+import { COURT } from './court'
+import { offNetBandOf } from './quality'
 import { solveByApex } from './trajectory'
 
 export type StyleId = 't1' | 't2' | 't3' | 'neg' | 'back'
@@ -148,8 +149,8 @@ function scoreCandidate(
   if (m.netClearance !== null && m.netClearance < 0.05) return null // 过不了网
 
   const offNet = cand.params.target.x
-  const backRow = isBackRow(attacker.rotationZone)
-  const p1 = backRow ? bandScore(offNet, 3.3, 7.2, 3.05, 8.9) : bandScore(offNet, 0.5, 1.2, 0.2, 2.8)
+  const [minOffNet, maxOffNet] = offNetBandOf(cand.styleId)
+  const p1 = bandScore(offNet, minOffNet, maxOffNet, 0.2, maxOffNet + 1.6)
 
   const needed = dist(attacker.pos, cand.params.target) / 4.5 + 0.25
   const p2 = needed <= 0.85 * m.flightT ? 1 : Math.max(0, 1 - (needed - 0.85 * m.flightT) * 1.5)

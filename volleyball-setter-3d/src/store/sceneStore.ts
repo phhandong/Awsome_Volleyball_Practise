@@ -73,7 +73,9 @@ export const useSceneStore = create<SceneState>((rawSet) => {
       && next.setterId === s.setterId && next.attackerId === s.attackerId) return patch
     const players = clearApproachLane(next.players, next.setterId, next.attackerId, next.params)
     if (players === next.players) return patch
+    const attacker = players.find(p => p.id === next.attackerId)!
     return { ...patch, players,
+      approachDist: Math.hypot(attacker.pos.x - next.params.target.x, attacker.pos.z - next.params.target.z),
       ...(patch.recommendationPlayers === next.players ? { recommendationPlayers: players } : {}),
     }
   })
@@ -138,12 +140,12 @@ export const useSceneStore = create<SceneState>((rawSet) => {
       ...(affectsRecommendation(s, changedIds) ? { selectedCandidateId: null } : {}),
     }
   }),
-  setSetter: (id) => set(s => id === s.setterId || !s.players.some(p => p.id === id) ? {} : ({
+  setSetter: (id) => set(s => id === s.setterId || id === s.attackerId || !s.players.some(p => p.id === id) ? {} : ({
     setterId: id, recommendationPlayers: s.players, selectedCandidateId: null, selectedStyle: null,
   })),
   setAttacker: (id) =>
     set((s) => {
-      if (id === s.attackerId) return { attackerId: id }
+      if (id === s.attackerId || id === s.setterId) return {}
       const old = s.players.find((p) => p.id === s.attackerId)
       const next = s.players.find((p) => p.id === id)
       if (!old || !next) return {}
@@ -183,12 +185,18 @@ export const useSceneStore = create<SceneState>((rawSet) => {
   clearCandidate: () => set({ selectedCandidateId: null, selectedStyle: null }),
   resetFormation: () => {
     const players = DEFAULT_FORMATION.map((f) => ({ ...f, pos: { ...f.pos } }))
-    set({
+    set(s => {
+      const setterId = players.some(p => p.id === s.setterId) ? s.setterId : players[0].id
+      const attackerId = s.attackerId !== setterId && players.some(p => p.id === s.attackerId)
+        ? s.attackerId : players.find(p => p.id !== setterId)!.id
+      return {
       players,
+      setterId,
+      attackerId,
       recommendationPlayers: players,
       selectedCandidateId: null,
       selectedStyle: null,
-    })
+    } })
   },
   setQuality: (quality) => set({ quality }),
   setTheme: (theme) => set({ theme }),
@@ -255,8 +263,12 @@ export function importScene(json: string): string | null {
     const params = { ...DEFAULT_PARAMS, ...(data.params ?? {}) }
     if (![2, 3, 4].includes(params.approachSteps)) return '助跑步数必须为 2、3 或 4'
     if (!['front', 'back'].includes(params.setDirection)) return '传球方式必须为正传或背传' 
+    if (players.length < 2 || players.some(p => typeof p.id !== 'string' || !p.id)
+      || new Set(players.map(p => p.id)).size !== players.length) return '至少需要两位不同的球员，球员 ID 不能重复'
     const setterId = data.setterId ?? players[0].id
-    const attackerId = data.attackerId ?? players[0].id
+    const attackerId = data.attackerId ?? players.find(p => p.id !== setterId)!.id
+    if (!players.some(p => p.id === setterId) || !players.some(p => p.id === attackerId)) return '二传和攻手必须属于当前阵容'
+    if (setterId === attackerId) return '同一位球员不能同时担任二传和攻手'
     const arrangedPlayers = clearApproachLane(players, setterId, attackerId, params)
     useSceneStore.setState({
       players: arrangedPlayers,
@@ -267,7 +279,7 @@ export function importScene(json: string): string | null {
       theme: data.theme === 'blue' ? 'blue' : 'wood',
       selectedCandidateId: null,
       selectedStyle: null,
-      approachDist: Math.hypot((players.find(p => p.id === data.attackerId) ?? players[0]).pos.x - params.target.x, (players.find(p => p.id === data.attackerId) ?? players[0]).pos.z - params.target.z),
+      approachDist: Math.hypot(arrangedPlayers.find(p => p.id === attackerId)!.pos.x - params.target.x, arrangedPlayers.find(p => p.id === attackerId)!.pos.z - params.target.z),
     })
     return null
   } catch {

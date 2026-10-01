@@ -190,7 +190,8 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
     if (kneeR.current) kneeR.current.rotation.x = -cur.kneeR
   })
 
-  const onDragStart = (e: { stopPropagation: () => void }): void => {
+  const onDragStart = (e: { button: number; stopPropagation: () => void }): void => {
+    if (e.button !== 0 || useUiStore.getState().cameraMode === 'pov') return
     e.stopPropagation()
     setDragging(true)
     beginGroundDrag(
@@ -247,14 +248,14 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
               <cylinderGeometry args={[0.042, 0.05, 0.09, 12]} />
               <meshStandardMaterial color={skin} roughness={0.55} />
             </mesh>
-            <group position={[0, 0.645, 0]}>
+            <group position={[0, RIG.headY, 0]}>
               <mesh castShadow>
                 <sphereGeometry args={[0.106, 26, 20]} />
                 <meshStandardMaterial color={skin} roughness={0.55} />
               </mesh>
               {/* 眼睛与眉毛 */}
               {[0.04, -0.04].map((x) => (
-                <mesh key={`e${x}`} position={[x, 0.002, 0.098]}>
+                <mesh key={`e${x}`} position={[x, RIG.eyeY, RIG.eyeZ]}>
                   <sphereGeometry args={[0.013, 10, 8]} />
                   <meshStandardMaterial color="#20242c" roughness={0.3} />
                 </mesh>

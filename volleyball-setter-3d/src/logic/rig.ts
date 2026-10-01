@@ -2,7 +2,8 @@ import type { Vec3 } from '../types'
 import type { Pose } from '../features/setplay/scene/poses'
 
 export const RIG = { hipY: 0.94, torsoY: 0.08, shoulderX: 0.185, shoulderY: 0.42,
-  upperArm: 0.28, forearm: 0.235, handRadius: 0.05 } as const
+  upperArm: 0.28, forearm: 0.235, handRadius: 0.05,
+  headY: 0.645, eyeY: 0.002, eyeZ: 0.098 } as const
 export const BALL_RADIUS = 0.105
 
 export function rotateX(p: Vec3, a: number): Vec3 {

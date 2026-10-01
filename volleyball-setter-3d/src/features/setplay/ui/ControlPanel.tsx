@@ -339,8 +339,8 @@ export function ControlPanel() {
             二传
             <select value={setterId} onChange={(e) => setSetter(e.target.value)}>
               {players.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {ROLE_NAMES[p.role]}（{p.rotationZone}号位）
+                <option key={p.id} value={p.id} disabled={p.id === attackerId}>
+                  {ROLE_NAMES[p.role]}（{p.rotationZone}号位）{p.id === attackerId ? ' · 当前攻手' : ''}
                 </option>
               ))}
             </select>
@@ -349,8 +349,8 @@ export function ControlPanel() {
             攻手
             <select value={attackerId} onChange={(e) => setAttacker(e.target.value)}>
               {players.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {ROLE_NAMES[p.role]}（{p.rotationZone}号位）
+                <option key={p.id} value={p.id} disabled={p.id === setterId}>
+                  {ROLE_NAMES[p.role]}（{p.rotationZone}号位）{p.id === setterId ? ' · 当前二传' : ''}
                 </option>
               ))}
             </select>
@@ -358,7 +358,7 @@ export function ControlPanel() {
         </div>
         <p className="hint-text">场上可直接拖拽球员调整布阵；黄色环为二传、蓝色环为当前攻手。</p>
         <div className="hint-text">本轮号位决定前后排身份，拖动和助跑不会改变身份。</div>
-        <div className="hint-text">其他队员会就近让出攻手的助跑与落地区域。</div>
+        <div className="hint-text">二传与攻手必须为不同队员；助跑会尝试避开二传和球网，其他队员就近让位。无法避让的冲突会在质量检查中标红。</div>
         {players.map(p => <label className="select-row" key={p.id}>{ROLE_NAMES[p.role]}
           <select aria-label={`${ROLE_NAMES[p.role]}（${p.rotationZone}号位）轮转号位`} value={p.rotationZone} onChange={e => setPlayerZone(p.id, Number(e.target.value) as ZoneId)}>
             {([1, 2, 3, 4, 5, 6] as const).map(zone => <option key={zone} value={zone}>{zone}号位 · {isBackRow(zone) ? '后排' : '前排'}</option>)}

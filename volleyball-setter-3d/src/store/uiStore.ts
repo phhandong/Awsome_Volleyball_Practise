@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 
 export type CameraMode = 'orbit' | 'pov'
+export type PovLookMode = 'auto' | 'free'
 export type ViewPreset = 'coach' | 'baseline' | 'side' | 'top'
 
 interface UiState {
@@ -8,6 +9,7 @@ interface UiState {
   panelOpen: boolean
   desktopPanelOpen: boolean
   povResetNonce: number
+  povLookMode: PovLookMode
   cameraMode: CameraMode
   viewPreset: ViewPreset
   /** 重新触发同一预设的过渡动画 */
@@ -24,6 +26,7 @@ interface UiState {
   setCompact: (v: boolean) => void
   setPanelOpen: (v: boolean) => void
   resetPov: () => void
+  setPovLookMode: (mode: PovLookMode) => void
   escape: () => void
 }
 
@@ -34,6 +37,7 @@ export const useUiStore = create<UiState>((set) => ({
   panelOpen: !compact,
   desktopPanelOpen: true,
   povResetNonce: 0,
+  povLookMode: 'auto',
   cameraMode: 'orbit',
   viewPreset: 'coach',
   viewNonce: 0,
@@ -50,6 +54,7 @@ export const useUiStore = create<UiState>((set) => ({
   setPanelOpen: (panelOpen) => set((s) => ({
     panelOpen, ...(!s.compact ? { desktopPanelOpen: panelOpen } : {}),
   })),
-  resetPov: () => set((s) => ({ povResetNonce: s.povResetNonce + 1 })),
+  resetPov: () => set((s) => ({ povLookMode: 'auto', povResetNonce: s.povResetNonce + 1 })),
+  setPovLookMode: (povLookMode) => set({ povLookMode }),
   escape: () => set((s) => s.compact && s.panelOpen ? { panelOpen: false } : { cameraMode: 'orbit' }),
 }))
