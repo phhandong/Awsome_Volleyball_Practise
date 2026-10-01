@@ -48,6 +48,18 @@ export function PlaybackBar() {
         </button>
         <button
           className="btn"
+          title="暂停并查看二传双手出手瞬间"
+          onClick={() => {
+            playback.playing = false
+            playback.t = playback.hold
+            setPlaying(false)
+            setT(playback.t)
+          }}
+        >
+          二传出手
+        </button>
+        <button
+          className="btn"
           disabled={solution.status !== 'ok'}
           title="暂停并查看攻手触球瞬间"
           onClick={() => {
@@ -61,6 +73,7 @@ export function PlaybackBar() {
         </button>
         <input
           type="range"
+          aria-label="播放进度"
           min={0}
           max={cycle}
           step={0.01}

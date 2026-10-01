@@ -49,17 +49,20 @@ export function sampleAttacker(plan: AttackerPlan, t: number, pose: Pose, out: A
     const progress = clamp((runU - previous) / (ends[step] - previous), 0, 1)
     const swing = Math.sin(progress * Math.PI)
     const sign = footSequence(plan.steps)[step] === 'L' ? 1 : -1
-    const phase = runU * plan.steps * Math.PI
-    const env = smooth01(runU / 0.12) * (1 - smooth01((runU - 0.72) / 0.28))
+    const env = smooth01(runU / 0.08)
     const s = sign * swing
     pose.hipL += (0.55 * s - pose.hipL) * env
     pose.hipR += (-0.55 * s - pose.hipR) * env
-    pose.kneeL += (-0.3 - 0.62 * Math.max(0, Math.sin(phase - 1.1)) - pose.kneeL) * env
-    pose.kneeR += (-0.3 - 0.62 * Math.max(0, Math.sin(phase - 1.1 + Math.PI)) - pose.kneeR) * env
+    pose.kneeL += (-0.3 - 0.62 * (sign === 1 ? swing : 0) - pose.kneeL) * env
+    pose.kneeR += (-0.3 - 0.62 * (sign === -1 ? swing : 0) - pose.kneeR) * env
     pose.shoulderLX += (0.15 - 0.5 * s - pose.shoulderLX) * env
     pose.shoulderRX += (0.15 + 0.5 * s - pose.shoulderRX) * env
-    pose.rootY += 0.045 * (0.5 - 0.5 * Math.cos(2 * phase)) * env
-    blendPose(pose, pose, POSES.spikeJump, smooth01((runU - 0.78) / 0.22))
+    pose.rootY += 0.045 * (0.5 - 0.5 * Math.cos(2 * Math.PI * progress)) * env
+    if (step === plan.steps - 2) {
+      pose.shoulderLX = -0.8 * swing
+      pose.shoulderRX = -0.8 * swing
+    }
+    if (step === plan.steps - 1) blendPose(pose, pose, POSES.spikeJump, smooth01(progress))
   } else if (t <= plan.contactT) {
     copyPose(pose, POSES.spikeJump)
     const airT = t - plan.takeoffT

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { CourtTheme, PlayerState, Quality, RouteParams, Vec2 } from '../types'
+import type { CourtTheme, PlayerState, Quality, RouteParams, Vec2, ZoneId } from '../types'
 import type { RouteCandidate, StyleId } from '../logic/presets'
 import { DEFAULT_FORMATION } from '../logic/court'
 
@@ -20,6 +20,7 @@ interface SceneState {
   setParams: (partial: Partial<RouteParams>) => void
   setTarget: (pos: Vec2) => void
   setPlayerPos: (id: string, pos: Vec2) => void
+  setPlayerZone: (id: string, zone: ZoneId) => void
   setSetter: (id: string) => void
   setAttacker: (id: string) => void
   applyCandidate: (c: RouteCandidate) => void
@@ -32,6 +33,8 @@ interface SceneState {
 }
 
 export const DEFAULT_PARAMS: RouteParams = {
+  setDirection: 'front',
+  approachSteps: 3,
   mode: 'apex',
   apexH: 3.4,
   flightT: 0.85,
@@ -86,6 +89,13 @@ export const useSceneStore = create<SceneState>((set) => ({
       }
       return { players }
     }),
+  setPlayerZone: (id, zone) => set((s) => {
+    const current = s.players.find(p => p.id === id)
+    if (!current) return {}
+    // 交换号位，保持本轮六人各占一个轮转位置。
+    return { players: s.players.map(p => p.id === id ? { ...p, rotationZone: zone }
+      : p.rotationZone === zone ? { ...p, rotationZone: current.rotationZone } : p) }
+  }),
   setSetter: (id) => set({ setterId: id }),
   setAttacker: (id) =>
     set((s) => {
@@ -111,6 +121,8 @@ export const useSceneStore = create<SceneState>((set) => ({
       params: {
         ...s.params,
         mode: 'apex',
+        setDirection: c.styleId === 'back' || c.variantName.includes('背') ? 'back' : 'front',
+        approachSteps: c.styleId === 't1' ? 2 : 3,
         apexH: c.params.apexH,
         target: { ...c.params.target },
         contactH: c.params.contactH,
@@ -155,7 +167,7 @@ export function exportScene(): string {
   const s = useSceneStore.getState()
   return JSON.stringify(
     {
-      version: 1,
+      version: 2,
       players: s.players,
       setterId: s.setterId,
       attackerId: s.attackerId,
@@ -179,14 +191,23 @@ export function importScene(json: string): string | null {
       theme?: CourtTheme
     }
     if (!Array.isArray(data.players) || data.players.length === 0) return '缺少球员数据'
-    const params = { ...useSceneStore.getState().params, ...(data.params ?? {}) }
+    const players = data.players.map((p, i) => ({ ...p,
+      rotationZone: p.rotationZone ?? DEFAULT_FORMATION.find(f => f.id === p.id)?.rotationZone ?? DEFAULT_FORMATION[i % 6].rotationZone,
+    }))
+    if (players.some(p => ![1, 2, 3, 4, 5, 6].includes(p.rotationZone))
+      || new Set(players.map(p => p.rotationZone)).size !== players.length) return '轮转号位必须为 1–6 且不能重复'
+    const params = { ...DEFAULT_PARAMS, ...(data.params ?? {}) }
+    if (![2, 3, 4].includes(params.approachSteps)) return '助跑步数必须为 2、3 或 4'
+    if (!['front', 'back'].includes(params.setDirection)) return '传球方式必须为正传或背传' 
     useSceneStore.setState({
-      players: data.players,
+      players,
       setterId: data.setterId ?? data.players[0].id,
       attackerId: data.attackerId ?? data.players[0].id,
       params,
       theme: data.theme === 'wood' ? 'wood' : 'blue',
       selectedCandidateId: null,
+      selectedStyle: null,
+      approachDist: Math.hypot((players.find(p => p.id === data.attackerId) ?? players[0]).pos.x - params.target.x, (players.find(p => p.id === data.attackerId) ?? players[0]).pos.z - params.target.z),
     })
     return null
   } catch {

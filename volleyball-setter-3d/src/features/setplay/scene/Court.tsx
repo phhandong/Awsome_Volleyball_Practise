@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { MeshReflectorMaterial } from '@react-three/drei'
 import { useSceneStore } from '../../../store/sceneStore'
-import { zoneCenter } from '../../../logic/court'
+import { COURT, zoneCenter } from '../../../logic/court'
 import { makeFloorTexture, makeZoneLabelTexture } from './textures'
 
 /** 场地：地板（可选反射）、白色标线、号位标注、看台剪影 */
@@ -42,8 +42,9 @@ export function Court() {
         <LineBox args={[0.05, 0.012, 9]} position={[-9, 0, 4.5]} />
         <LineBox args={[0.05, 0.012, 9]} position={[9, 0, 4.5]} />
         <LineBox args={[0.05, 0.012, 9]} position={[0, 0, 4.5]} />
-        <LineBox args={[0.05, 0.012, 9]} position={[3, 0, 4.5]} />
-        <LineBox args={[0.05, 0.012, 9]} position={[-3, 0, 4.5]} />
+        {/* 三米为进攻线后缘，整条线属于前区，与起跳脚判定一致。 */}
+        <LineBox args={[COURT.lineWidth, 0.012, 9]} position={[COURT.attackLine - COURT.lineWidth / 2, 0, 4.5]} />
+        <LineBox args={[COURT.lineWidth, 0.012, 9]} position={[-COURT.attackLine + COURT.lineWidth / 2, 0, 4.5]} />
       </group>
 
       {/* 号位标注（仅我方半场） */}

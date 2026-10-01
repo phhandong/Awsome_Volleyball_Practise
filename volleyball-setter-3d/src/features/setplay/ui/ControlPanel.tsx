@@ -1,3 +1,6 @@
+import type { ApproachSteps, ZoneId } from '../../../types'
+import { footSequenceLabel } from '../../../logic/approach'
+import { isBackRow } from '../../../logic/court'
 import { useRef } from 'react'
 import type { ChangeEvent } from 'react'
 import { useSceneStore, exportScene, importScene } from '../../../store/sceneStore'
@@ -50,6 +53,7 @@ export function ControlPanel() {
   const players = useSceneStore((s) => s.players)
   const setterId = useSceneStore((s) => s.setterId)
   const attackerId = useSceneStore((s) => s.attackerId)
+  const setPlayerZone = useSceneStore(s => s.setPlayerZone)
   const setSetter = useSceneStore((s) => s.setSetter)
   const setAttacker = useSceneStore((s) => s.setAttacker)
   const resetFormation = useSceneStore((s) => s.resetFormation)
@@ -64,7 +68,8 @@ export function ControlPanel() {
   const setPreset = useUiStore((s) => s.setPreset)
   const showQuality = useUiStore((s) => s.showQuality)
   const setShowQuality = useUiStore((s) => s.setShowQuality)
-  const approachDist = useSceneStore((s) => s.approachDist)
+  const attacker = players.find(p => p.id === attackerId)
+  const approachDist = attacker ? Math.hypot(attacker.pos.x - params.target.x, attacker.pos.z - params.target.z) : 0
   const setApproachDist = useSceneStore((s) => s.setApproachDist)
   const selectedStyle = useSceneStore((s) => s.selectedStyle)
 
@@ -165,6 +170,10 @@ export function ControlPanel() {
             </button>
           ))}
         </div>
+        <div className="seg">
+          <button className={`btn${params.setDirection === 'front' ? ' active' : ''}`} onClick={() => setParams({ setDirection: 'front' })}>正传</button>
+          <button className={`btn${params.setDirection === 'back' ? ' active' : ''}`} onClick={() => setParams({ setDirection: 'back' })}>背传</button>
+        </div>
         <SliderRow label="出手高度" value={params.releaseH} min={1.8} max={2.6} step={0.01} onChange={(v) => setParams({ releaseH: v })} format={(v) => `${v.toFixed(2)} m`} />
 
         <div className="target-row">
@@ -198,7 +207,7 @@ export function ControlPanel() {
         </div>
 
         <SliderRow
-          label="攻手助跑距离"
+          label="起点到击球点投影"
           value={approachDist}
           min={0.6}
           max={4}
@@ -206,9 +215,12 @@ export function ControlPanel() {
           onChange={(v) => setApproachDist(v)}
           format={(v) => `${v.toFixed(2)} m`}
         />
-        <div className="hint-text">
-          建议：{approachSuggest} · 当前约 {Math.max(1, Math.round(approachDist / 0.75))} 步
-        </div>
+        <label className="select-row">助跑步数（右手扣球）
+          <select aria-label="助跑步数" value={params.approachSteps} onChange={e => setParams({ approachSteps: Number(e.target.value) as ApproachSteps })}>
+            <option value={2}>两步：右—左</option><option value={3}>三步：左—右—左</option><option value={4}>四步：右—左—右—左</option>
+          </select>
+        </label>
+        <div className="hint-text">{params.approachSteps}步：{footSequenceLabel(params.approachSteps)}。建议：{approachSuggest}；实际地面助跑距离见质量检查。</div>
 
         {solution.status === 'error' ? (
           <div className="err-banner">{solution.message}</div>
@@ -354,6 +366,12 @@ export function ControlPanel() {
           </label>
         </div>
         <p className="hint-text">场上可直接拖拽球员调整布阵；黄色环为二传、蓝色环为当前攻手。</p>
+        <div className="hint-text">本轮号位决定前后排身份，拖动和助跑不会改变身份。</div>
+        {players.map(p => <label className="select-row" key={p.id}>#{p.number} {p.name}
+          <select aria-label={`#${p.number}轮转号位`} value={p.rotationZone} onChange={e => setPlayerZone(p.id, Number(e.target.value) as ZoneId)}>
+            {([1, 2, 3, 4, 5, 6] as const).map(zone => <option key={zone} value={zone}>{zone}号位 · {isBackRow(zone) ? '后排' : '前排'}</option>)}
+          </select>
+        </label>)}
         <button className="btn wide-btn" onClick={resetFormation}>
           重置默认站位
         </button>

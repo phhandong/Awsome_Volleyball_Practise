@@ -137,7 +137,7 @@ describe('攻手助跑与触球', () => {
 
 describe('腾空水平速度', () => {
   const front = () => planAttacker({ x: 3.3, z: 7.65 }, { x: 0.95, z: 7 }, 2.85, 0.83)
-  const back = () => planAttacker({ x: 5.5, z: 4.6 }, { x: 3.8, z: 4.5 }, 3, 1.3)
+  const back = () => planAttacker({ x: 5.5, z: 4.6 }, { x: 3.8, z: 4.5 }, 3, 1.3, 3, 6)
   const velocityAt = (plan: ReturnType<typeof planAttacker>, t: number) => {
     const dt = 1e-5
     const a = frameAt(plan, t - dt).frame

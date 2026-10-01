@@ -16,6 +16,7 @@ export function groundMove(u: number, distance: number, duration: number, endSpe
 export function groundPeakSpeed(distance: number, duration: number, endSpeed: number): number {
   const a = -6 * distance / duration + 3 * endSpeed
   const b = 6 * distance / duration - 2 * endSpeed
+  if (Math.abs(a) < 1e-9) return Math.max(0, endSpeed)
   const u = Math.max(0, Math.min(1, -b / (2 * a)))
   return Math.max(endSpeed, a * u * u + b * u, 0)
 }
@@ -69,7 +70,7 @@ export function planAttacker(stand: Vec2, target: Vec2, contactH: number, flight
   const netSpeedLimit = dir.x < -1e-6
     ? Math.max(0, contactRoot.x - 0.25) / (-dir.x * (fallT + brakeT / 2))
     : Infinity
-  const airSpeed = Math.min(nominalSpeed, toContact / (riseT + 0.18), netSpeedLimit)
+  const airSpeed = Math.min(nominalSpeed, toContact / (riseT + Math.max(0.18, { 2: 0.32, 3: 0.5, 4: 0.68 }[steps] / 3)), netSpeedLimit)
   const airVelocity = { x: dir.x * airSpeed, z: dir.z * airSpeed }
   const takeoffRoot = { x: contactRoot.x - airVelocity.x * riseT, z: contactRoot.z - airVelocity.z * riseT }
   const landingRoot = { x: contactRoot.x + airVelocity.x * fallT, z: contactRoot.z + airVelocity.z * fallT }

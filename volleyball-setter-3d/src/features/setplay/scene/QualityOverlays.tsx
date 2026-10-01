@@ -3,7 +3,7 @@ import { Html, Line } from '@react-three/drei'
 import type { Trajectory, Vec2 } from '../../../types'
 import type { QualityLevel, QualityReport } from '../../../logic/quality'
 import { useUiStore } from '../../../store/uiStore'
-import { planAttacker } from './attackerMotion'
+import { groundMove, stepEnds, footSequenceLabel } from '../../../logic/approach'
 
 const LEVEL_COLOR: Record<QualityLevel, string> = {
   ok: '#7ce6a5',
@@ -57,8 +57,7 @@ export function QualityOverlays({
   target: Vec2
 }) {
   const show = useUiStore((s) => s.showQuality)
-  const motion = useMemo(() => planAttacker(attackerPos, target, pass.end.y, pass.flightT),
-    [attackerPos, target, pass])
+  const motion = report.approach
   const takeoff = motion.takeoffRoot
 
   const apex = useMemo(() => {
@@ -74,14 +73,14 @@ export function QualityOverlays({
     const dx = takeoff.x - attackerPos.x
     const dz = takeoff.z - attackerPos.z
     const d = Math.hypot(dx, dz)
-    const steps = Math.max(1, Math.round(d / 0.75))
+    const steps = motion.steps
     const dots: { x: number; z: number }[] = []
-    for (let i = 1; i < steps; i++) {
-      const k = i / steps
+    for (const u of stepEnds(steps)) {
+      const k = d > 1e-6 ? groundMove(u, d, motion.runT, motion.airSpeed) / d : 0
       dots.push({ x: attackerPos.x + dx * k, z: attackerPos.z + dz * k })
     }
     return { d, steps, dots }
-  }, [attackerPos, takeoff])
+  }, [attackerPos, takeoff, motion.steps, motion.runT, motion.airSpeed])
 
   const item = (key: string): QualityReport['items'][number] | undefined =>
     report.items.find((i) => i.key === key)
@@ -166,8 +165,8 @@ export function QualityOverlays({
           ))}
           <Chip
             position={[attackerPos.x + (takeoff.x - attackerPos.x) * 0.42, 0.16, attackerPos.z + (takeoff.z - attackerPos.z) * 0.42]}
-            text={`助跑 ${runInfo.d.toFixed(1)}m · ${runInfo.steps} 步 · 腾空 ${motion.airSpeed.toFixed(1)}m/s`}
-            level="ok"
+            text={`助跑 ${runInfo.d.toFixed(1)}m · ${runInfo.steps}步 ${footSequenceLabel(motion.steps)} · 腾空 ${motion.airSpeed.toFixed(1)}m/s`}
+            level={item('approach')?.level ?? 'ok'}
           />
           <Chip position={[attackerPos.x, 2.32, attackerPos.z]} text={`${timing.label} ${timing.value}`} level={timing.level} />
         </group>

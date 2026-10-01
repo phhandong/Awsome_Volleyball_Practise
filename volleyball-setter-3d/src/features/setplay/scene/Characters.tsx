@@ -1,3 +1,4 @@
+import { sampleSetterPose, setterYaw } from '../../../logic/setterMotion'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -5,13 +6,11 @@ import { Billboard } from '@react-three/drei'
 import type { PlayerState, Vec2 } from '../../../types'
 import { useSceneStore } from '../../../store/sceneStore'
 import { useUiStore } from '../../../store/uiStore'
-import { playback, phaseAt } from '../animation'
+import { playback } from '../animation'
 import { beginGroundDrag, clampToCourt } from './dragManager'
 import { makeNumberTexture } from './textures'
 import { planAttacker, RIG, sampleAttacker, type AttackerFrame } from './attackerMotion'
 import {
-  blendPose,
-  clamp,
   copyPose,
   createScratchPose,
   damp,
@@ -47,7 +46,6 @@ const TORSO_PROFILE = [
 type HairStyle = 'crop' | 'bun' | 'band'
 const HAIR_STYLES: HairStyle[] = ['crop', 'bun', 'band', 'crop', 'bun', 'crop']
 
-const smooth01 = (k: number): number => k * k * (3 - 2 * k)
 
 interface PlayersProps {
   flightT: number
@@ -94,7 +92,7 @@ interface CharacterProps {
   contactH: number
 }
 
-function Character({ player, index, isSetter, isAttacker, hidden, flightT, attackT, target, contactH }: CharacterProps) {
+function Character({ player, index, isSetter, isAttacker, hidden, flightT, target, contactH }: CharacterProps) {
   const root = useRef<THREE.Group>(null)
   const facing = useRef<THREE.Group>(null)
   const body = useRef<THREE.Group>(null)
@@ -124,30 +122,16 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, attac
   const scratch = useRef<Pose>(createScratchPose())
   const yawRef = useRef<number>(isSetter ? Math.PI / 2 : -Math.PI / 2)
 
-  const attackerPlan = useMemo(() => planAttacker(player.pos, target, contactH, flightT),
-    [player.pos, target, contactH, flightT])
+  const params = useSceneStore(s => s.params)
+  const attackerPlan = useMemo(() => planAttacker(player.pos, target, contactH, flightT, params.approachSteps, player.rotationZone),
+    [player.pos, player.rotationZone, target, contactH, flightT, params.approachSteps])
   const attackerFrame = useRef<AttackerFrame>({ x: player.pos.x, z: player.pos.z, yaw: -Math.PI / 2 })
 
   // 计算本帧目标姿态（时间轴：hold → flight(传球) → attack(击球飞出) → tail）
   const targetPose = (time: number, out: Pose): Pose => {
     const base = (n: PoseName): Pose => POSES[n] as unknown as Pose
     if (isSetter) {
-      const ph = phaseAt(flightT, attackT, playback.t)
-      if (ph.kind === 'hold') {
-        // 从身前往上举：胸前 → 额前举球 → 出手送向上方
-        if (ph.u < 0.3) {
-          return blendPose(out, base('receive'), base('setReady'), smooth01(ph.u / 0.3))
-        }
-        if (ph.u < 0.6) return copyPose(out, base('setReady'))
-        const k = clamp((ph.u - 0.6) / 0.4, 0, 1)
-        return blendPose(out, base('setReady'), base('setContact'), k * k * (3 - 2 * k))
-      }
-      if (ph.kind === 'flight') {
-        if (ph.u < 0.22) return copyPose(out, base('setContact'))
-        const k = clamp((ph.u - 0.22) / 0.3, 0, 1)
-        return blendPose(out, base('setContact'), base('idle'), k)
-      }
-      return copyPose(out, base('idle'))
+      return sampleSetterPose(playback.t, params.releaseH, params.setDirection, out, playback.hold)
     }
     // 其他球员：轻微呼吸起伏
     copyPose(out, base(libero ? 'receive' : 'idle'))
@@ -175,7 +159,7 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, attac
       g.position.set(player.pos.x, 0, player.pos.z)
       const tgt = targetPose(time, scratch.current)
       if (isSetter) {
-        desiredYaw = Math.atan2(target.x - player.pos.x, target.z - player.pos.z)
+        desiredYaw = setterYaw(player.pos, target, params.setDirection)
         copyPose(cur, tgt)
         yawRef.current = desiredYaw
       } else {

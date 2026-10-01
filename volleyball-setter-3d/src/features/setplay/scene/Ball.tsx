@@ -1,3 +1,5 @@
+import { sampleSetterBall } from '../../../logic/setterMotion'
+import { useSceneStore } from '../../../store/sceneStore'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
@@ -13,6 +15,9 @@ const TRAIL_N = 24
  * 时间轴：hold(在二传手上) → flight(传球至击球点) → attack(被击飞向对方场地) → tail(落地定格)
  */
 export function Ball({ traj, attack }: { traj: Trajectory | null; attack: Trajectory | null }) {
+  const params = useSceneStore(s => s.params)
+  const setter = useSceneStore(s => s.players.find(p => p.id === s.setterId))
+  const holdBall = (t: number) => sampleSetterBall(setter?.pos ?? { x: 0.7, z: 1.6 }, params.target, params.releaseH, params.setDirection, t, playback.hold)
   const mesh = useRef<THREE.Mesh>(null)
   const trailRef = useRef<THREE.Line>(null)
   const ballTex = useMemo(() => makeBallTexture(), [])
@@ -45,7 +50,7 @@ export function Ball({ traj, attack }: { traj: Trajectory | null; attack: Trajec
     }
 
     const active = (ph.kind === 'attack' || ph.kind === 'tail') && attack ? attack : traj
-    const p = sampleBall(traj, attack, playback.t)
+    const p = sampleBall(traj, attack, playback.t, holdBall)
     m.position.set(p.x, p.y, p.z)
     ballWorld.copy(m.position)
 

@@ -59,9 +59,10 @@ export function phaseAt(flightT: number, attackT: number, t: number): Phase {
 }
 
 /** 球和拖尾共用的时间采样，传球终点与扣球起点在同一时刻相接。 */
-export function sampleBall(traj: Trajectory, attack: Trajectory | null, t: number): Vec3 {
+export function sampleBall(traj: Trajectory, attack: Trajectory | null, t: number, holdBall?: (time: number) => Vec3): Vec3 {
   const ph = phaseAt(traj.flightT, attack?.flightT ?? 0.5, t)
   if (ph.kind === 'hold') {
+    if (holdBall) return holdBall(t)
     const k = ph.u * ph.u * (3 - 2 * ph.u)
     return { ...traj.start, y: traj.start.y - Math.max(0.2, traj.start.y - 1) * (1 - k) }
   }

@@ -14,6 +14,7 @@ export const COURT = {
   netHeight: 2.43,
   /** 进攻线距网 */
   attackLine: 3,
+  lineWidth: 0.05,
   /** 无障碍区宽度 */
   apron: 4,
 } as const

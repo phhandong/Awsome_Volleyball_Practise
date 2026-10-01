@@ -1,3 +1,5 @@
+import { setterRelease } from '../../logic/setterMotion'
+import { planAttacker } from '../../logic/approach'
 import { useMemo } from 'react'
 import { useSceneStore } from '../../store/sceneStore'
 import { computeAttackRoute, solveByApex, solveBySpeed, solveByTime } from '../../logic/trajectory'
@@ -15,15 +17,7 @@ export function useSolution(): SolveResult {
 
   return useMemo(() => {
     const sp = setter ? setter.pos : { x: 0.7, z: 1.6 }
-    const dx = params.target.x - sp.x
-    const dz = params.target.z - sp.z
-    const d = Math.hypot(dx, dz) || 1
-    // 出手点在额前上方：向目标方向前移 0.16m，与人物持球手位一致
-    const start = {
-      x: sp.x + (dx / d) * 0.16,
-      y: params.releaseH,
-      z: sp.z + (dz / d) * 0.16,
-    }
+    const start = setterRelease(sp, params.target, params.releaseH, params.setDirection)
     const end = { x: params.target.x, y: params.contactH, z: params.target.z }
     switch (params.mode) {
       case 'apex':
@@ -51,6 +45,7 @@ export function useQuality(): QualityReport | null {
   const { attack } = useAttackRoute(solution)
   const attacker = useSceneStore((s) => s.players.find((p) => p.id === s.attackerId))
   const setter = useSceneStore((s) => s.players.find((p) => p.id === s.setterId))
+  const steps = useSceneStore((s) => s.params.approachSteps)
   const styleId = useSceneStore((s) => s.selectedStyle)
 
   return useMemo(() => {
@@ -58,9 +53,10 @@ export function useQuality(): QualityReport | null {
     return evaluateQuality({
       pass: solution.traj,
       attack,
-      attacker: { pos: attacker.pos, role: attacker.role },
+      attacker: { pos: attacker.pos, role: attacker.role, rotationZone: attacker.rotationZone },
+      approach: planAttacker(attacker.pos, solution.traj.end, solution.traj.end.y, solution.traj.flightT, steps, attacker.rotationZone),
       setterPos: setter.pos,
       styleId,
     })
-  }, [solution, attack, attacker, setter, styleId])
+  }, [solution, attack, attacker, setter, styleId, steps])
 }

@@ -1,5 +1,6 @@
+import { setterRelease } from './setterMotion'
 import type { PlayerState, SolveResult, Vec2 } from '../types'
-import { COURT } from './court'
+import { COURT, isBackRow } from './court'
 import { solveByApex } from './trajectory'
 
 export type StyleId = 't1' | 't2' | 't3' | 'neg' | 'back'
@@ -141,16 +142,16 @@ function bandScore(v: number, lo: number, hi: number, min: number, max: number):
 
 function scoreCandidate(
   cand: Omit<RouteCandidate, 'score' | 'parts'>,
-  attackerPos: Vec2,
+  attacker: PlayerState,
 ): { score: number; parts: RouteCandidate['parts'] } | null {
   const m = cand.metrics
   if (m.netClearance !== null && m.netClearance < 0.05) return null // 过不了网
 
   const offNet = cand.params.target.x
-  const isBackRow = offNet > COURT.attackLine
-  const p1 = isBackRow ? bandScore(offNet, 3.3, 7.2, 3.05, 8.9) : bandScore(offNet, 0.5, 1.2, 0.2, 2.8)
+  const backRow = isBackRow(attacker.rotationZone)
+  const p1 = backRow ? bandScore(offNet, 3.3, 7.2, 3.05, 8.9) : bandScore(offNet, 0.5, 1.2, 0.2, 2.8)
 
-  const needed = dist(attackerPos, cand.params.target) / 4.5 + 0.25
+  const needed = dist(attacker.pos, cand.params.target) / 4.5 + 0.25
   const p2 = needed <= 0.85 * m.flightT ? 1 : Math.max(0, 1 - (needed - 0.85 * m.flightT) * 1.5)
 
   const p3 = bandScore(m.elevDeg, 22, 58, 6, 78)
@@ -175,15 +176,7 @@ export function generateRoutes(setter: PlayerState, attacker: PlayerState): Reco
     const deltas = spec.apexDeltas
     for (const variant of spec.variants) {
       const base = inCourt(variant.target(setter.pos, attacker.pos))
-      // 出手点同样取额前上方（朝该球目标方向前移 0.16m）
-      const sdx = base.x - setter.pos.x
-      const sdz = base.z - setter.pos.z
-      const sd = Math.hypot(sdx, sdz) || 1
-      const start = {
-        x: setter.pos.x + (sdx / sd) * 0.16,
-        y: 2.2,
-        z: setter.pos.z + (sdz / sd) * 0.16,
-      }
+      const start = setterRelease(setter.pos, base, 2.2, spec.id === 'back' || variant.name.includes('背') ? 'back' : 'front')
       for (const d of deltas) {
         const target = base
         const apexH = variant.apexH + d
@@ -212,7 +205,7 @@ export function generateRoutes(setter: PlayerState, attacker: PlayerState): Reco
             netClearance: t.netClearance,
           },
         }
-        const scored = scoreCandidate(partial, attacker.pos)
+        const scored = scoreCandidate(partial, attacker)
         if (!scored) continue
         candidates.push({ ...partial, score: scored.score, parts: scored.parts })
       }

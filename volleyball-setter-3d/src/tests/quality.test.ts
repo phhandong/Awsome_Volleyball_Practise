@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { attackerReachOf, evaluateQuality, offNetBandOf } from '../logic/quality'
 import { computeAttackRoute, solveByApex } from '../logic/trajectory'
-import type { SolveResult, Vec2 } from '../types'
+import type { SolveResult, Vec2, ZoneId } from '../types'
 
 /** 构造一条从二传 (0.7, 2.2, 1.6) 到目标的传球轨迹 */
 function passTo(target: Vec2, contactH: number, apexH: number): SolveResult {
@@ -14,6 +14,7 @@ function evalFor(opts: {
   apexH?: number
   attackerPos: Vec2
   attackerRole?: 'S' | 'OH' | 'MB' | 'OP' | 'L'
+  rotationZone?: ZoneId
   styleId?: null
 }) {
   const pass = passTo(opts.target, opts.contactH, opts.apexH ?? 3.4)
@@ -22,7 +23,7 @@ function evalFor(opts: {
   return evaluateQuality({
     pass: pass.traj,
     attack: attack.traj,
-    attacker: { pos: opts.attackerPos, role: opts.attackerRole ?? 'OH' },
+    attacker: { pos: opts.attackerPos, role: opts.attackerRole ?? 'OH', rotationZone: opts.rotationZone ?? 4 },
     setterPos: { x: 0.7, z: 1.6 },
     styleId: opts.styleId ?? null,
   })
@@ -75,7 +76,7 @@ describe('离网距离 band', () => {
   })
 
   it('后排攻手使用后场标准区', () => {
-    const r = evalFor({ target: { x: 4.2, z: 1.5 }, contactH: 3.0, apexH: 4.3, attackerPos: { x: 4.6, z: 1.3 } })
+    const r = evalFor({ target: { x: 4.2, z: 1.5 }, contactH: 3.0, apexH: 4.3, rotationZone: 1, attackerPos: { x: 4.6, z: 1.3 } })
     expect(r.offNetBand).toEqual([3.3, 7.2])
     expect(item(r, 'offnet').level).toBe('ok')
   })
@@ -89,7 +90,7 @@ describe('人球节奏', () => {
     expect(r.timingDelta).toBeLessThan(0)
   })
 
-  it('等球过久（黄色，风格上限）', () => {
+  it('足够时间允许延后启动，而不是在空中等球', () => {
     // 一节奏允许等球 0.15s：二传就在目标旁边、攻手也不远 → Δ 大
     const r = evalFor({
       target: { x: 0.95, z: 7.0 },
@@ -98,8 +99,8 @@ describe('人球节奏', () => {
       attackerPos: { x: 1.2, z: 7.0 },
     })
     const t = item(r, 'timing')
-    if (r.timingDelta > 0.15) expect(t.level).toBe('warn')
-    else expect(t.level).toBe('ok')
+    expect(t.level).toBe('ok')
+    expect(r.approach.startT).toBeGreaterThan(0)
   })
 })
 
@@ -135,7 +136,7 @@ describe('规则违例', () => {
     const r = evalFor({
       target: { x: 1.0, z: 1.0 },
       contactH: 2.85,
-      attackerPos: { x: 4.6, z: 1.3 },
+      rotationZone: 1, attackerPos: { x: 4.6, z: 1.3 },
     })
     expect(item(r, 'rule').level).toBe('bad')
     expect(item(r, 'rule').value).toContain('后排违例')
@@ -146,7 +147,7 @@ describe('规则违例', () => {
       target: { x: 4.2, z: 1.5 },
       contactH: 3.0,
       apexH: 4.3,
-      attackerPos: { x: 4.6, z: 1.3 },
+      rotationZone: 1, attackerPos: { x: 4.6, z: 1.3 },
     })
     expect(item(r, 'rule').level).toBe('ok')
   })
