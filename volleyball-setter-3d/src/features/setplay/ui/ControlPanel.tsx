@@ -116,6 +116,7 @@ export function ControlPanel() {
 
       <section className="sec">
         <h3>传球参数</h3>
+        <p className="hint-text">球路已计入空气阻力，传球与扣球共用同一模型。</p>
         <div className="seg">
           <button className={`btn${params.mode === 'apex' ? ' active' : ''}`} onClick={() => setParams({ mode: 'apex' })}>
             按弧顶

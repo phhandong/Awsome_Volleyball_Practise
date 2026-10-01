@@ -58,13 +58,15 @@ export interface RouteParams {
 export interface Trajectory {
   start: Vec3
   end: Vec3
-  /** 曲线采样点（含首尾） */
+  /** 等时间间隔的积分采样点（含首尾） */
   points: Vec3[]
+  /** 对应采样点的瞬时速度，供连续时间插值 */
+  velocities: Vec3[]
   /** 飞行时间 s */
   flightT: number
   /** 出手初速度 m/s */
   speed: number
-  /** 水平速度分量 m/s */
+  /** 出手时的水平速度分量 m/s，飞行中受阻力衰减 */
   horizontalV: number
   /** 竖直初速度 m/s（向上为正） */
   verticalV0: number

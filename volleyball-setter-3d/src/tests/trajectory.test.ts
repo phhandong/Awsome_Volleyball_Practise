@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { computeAttackRoute, sampleAt, solveByApex, solveBySpeed, solveByTime } from '../logic/trajectory'
 import { COURT } from '../logic/court'
+import { integrateBall } from '../logic/ballPhysics'
 
 const S: Vec3ish = { x: 0.6, y: 2.2, z: 4.5 }
 const E: Vec3ish = { x: 4.6, y: 2.8, z: 4.5 }
@@ -41,15 +42,17 @@ describe('solveByApex', () => {
 })
 
 describe('solveByTime', () => {
-  it('派生量正确', () => {
+  it('为抵消阻力反解更大的初速度，积分仍准确到达目标', () => {
     const r = solveByTime(S, E, 1.0)
     expect(r.status).toBe('ok')
     if (r.status !== 'ok') return
     const t = r.traj
     expect(t.flightT).toBeCloseTo(1.0)
-    expect(t.horizontalV).toBeCloseTo(4.0)
-    // v0y = dy + g*T/2 = 0.6 + 4.905 = 5.505
-    expect(t.verticalV0).toBeCloseTo(0.6 + 9.81 * 0.5, 3)
+    expect(t.horizontalV).toBeGreaterThan(4.0)
+    expect(t.verticalV0).toBeGreaterThan(0.6 + 9.81 * 0.5)
+    const integrated = integrateBall(t.horizontalV, t.verticalV0, t.flightT).state
+    expect(integrated.d).toBeCloseTo(4, 7)
+    expect(integrated.y).toBeCloseTo(0.6, 7)
   })
 })
 
@@ -62,6 +65,8 @@ describe('solveBySpeed', () => {
     if (r.status === 'ok' && h.status === 'ok') {
       expect(r.traj.flightT).toBeLessThan(h.traj.flightT)
       expect(r.traj.apexY).toBeLessThan(h.traj.apexY)
+      expect(r.traj.speed).toBeCloseTo(9, 6)
+      expect(h.traj.speed).toBeCloseTo(9, 6)
     }
   })
 
@@ -89,7 +94,7 @@ describe('过网余量', () => {
 })
 
 describe('sampleAt', () => {
-  it('端点与中点符合抛物线', () => {
+  it('按真实时间采样阻力轨迹，水平速度随飞行衰减', () => {
     const r = solveByTime(S, E, 1.0)
     expect(r.status).toBe('ok')
     if (r.status !== 'ok') return
@@ -100,7 +105,11 @@ describe('sampleAt', () => {
     expect(pEnd.y).toBeCloseTo(E.y, 3)
     expect(pEnd.x).toBeCloseTo(E.x, 5)
     const pm = sampleAt(t, t.flightT / 2)
-    expect(pm.y).toBeCloseTo(S.y + t.verticalV0 * 0.5 - 0.5 * 9.81 * 0.25, 3)
+    const mid = integrateBall(t.horizontalV, t.verticalV0, 0.5).state
+    expect(pm.y).toBeCloseTo(S.y + mid.y, 6)
+    expect(pm.x).toBeCloseTo(S.x + mid.d, 6)
+    expect(pm.x).toBeGreaterThan((S.x + E.x) / 2)
+    expect(t.velocities.at(-1)!.x).toBeLessThan(t.velocities[0].x)
   })
 
   it('t 超界被钳制', () => {

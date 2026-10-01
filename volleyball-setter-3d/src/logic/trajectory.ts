@@ -1,156 +1,212 @@
 import type { SolveResult, Trajectory, Vec3 } from '../types'
 import { COURT } from './court'
+import { BALL_PHYSICS, hermite, integrateBall } from './ballPhysics'
 
-const G = 9.81
-const SAMPLES = 48
+const G = BALL_PHYSICS.gravity
+const MAX_TIME = 8
+const ERROR: SolveResult = { status: 'error', message: '这些参数无法形成有效球路，请调整时间、弧顶或球速' }
+type Launch = { vh: number; vy: number; flight: ReturnType<typeof integrateBall> }
+// 多个面板/场景消费者重复求同一解；仅缓存纯数值结果，限制内存占用。
+const launchCache = new Map<string, Launch>()
 
-function hypot2(dx: number, dz: number): number {
-  return Math.hypot(dx, dz)
+function validPoints(start: Vec3, end: Vec3): boolean {
+  return [start.x, start.y, start.z, end.x, end.y, end.z].every(Number.isFinite)
+    && Math.hypot(end.x - start.x, end.z - start.z) >= 0.05
 }
 
-/** 球穿过网面（x=0）处高于网带的余量；不穿网返回 null */
-function computeNetClearance(points: Vec3[]): number | null {
+/** 固定时间反解初速度。每次积分使用与播放相同的阻力模型。 */
+function launchForTime(span: number, dy: number, time: number) {
+  const key = `${span},${dy},${time}`
+  const cached = launchCache.get(key)
+  if (cached) return cached
+  let vh = span / time
+  let vy = dy / time + G * time / 2
+  if (!Number.isFinite(Math.hypot(vh, vy)) || Math.hypot(vh, vy) > 1000) return null
+  for (let i = 0; i < 16; i++) {
+    const flight = integrateBall(vh, vy, time)
+    const rx = flight.state.d - span
+    const ry = flight.state.y - dy
+    const error = Math.hypot(rx, ry)
+    if (error < 1e-8) {
+      const launch = { vh, vy, flight }
+      if (launchCache.size >= 512) launchCache.delete(launchCache.keys().next().value!)
+      launchCache.set(key, launch)
+      return launch
+    }
+    const epsH = Math.max(1e-5, Math.abs(vh) * 1e-5)
+    const epsY = Math.max(1e-5, Math.abs(vy) * 1e-5)
+    const h = integrateBall(vh + epsH, vy, time).state
+    const v = integrateBall(vh, vy + epsY, time).state
+    const a = (h.d - flight.state.d) / epsH
+    const b = (v.d - flight.state.d) / epsY
+    const c = (h.y - flight.state.y) / epsH
+    const d = (v.y - flight.state.y) / epsY
+    const det = a * d - b * c
+    if (!Number.isFinite(det) || Math.abs(det) < 1e-12) return null
+    const deltaH = (d * rx - b * ry) / det
+    const deltaY = (a * ry - c * rx) / det
+    let accepted = false
+    for (let scale = 1; scale >= 1 / 64; scale /= 2) {
+      const nh = vh - scale * deltaH
+      const ny = vy - scale * deltaY
+      if (nh <= 0 || Math.hypot(nh, ny) > 1000) continue
+      const next = integrateBall(nh, ny, time).state
+      if (Math.hypot(next.d - span, next.y - dy) < error) {
+        vh = nh
+        vy = ny
+        accepted = true
+        break
+      }
+    }
+    if (!accepted) return null
+  }
+  return null
+}
+
+/** 球穿过网面处高于网带的余量。等时密采样避免采用匀速水平插值。 */
+function computeNetClearance(points: Vec3[], velocities: Vec3[], time: number): number | null {
+  const dt = time / (points.length - 1)
   for (let i = 1; i < points.length; i++) {
     const a = points[i - 1]
     const b = points[i]
-    if ((a.x > 0 && b.x < 0) || (a.x < 0 && b.x > 0)) {
-      const k = a.x / (a.x - b.x)
-      const y = a.y + (b.y - a.y) * k
-      return y - COURT.netHeight
+    if (a.x === 0) return a.y - COURT.netHeight
+    if (a.x !== b.x && a.x * b.x <= 0) {
+      const va = velocities[i - 1]
+      const vb = velocities[i]
+      let lo = 0
+      let hi = 1
+      for (let j = 0; j < 24; j++) {
+        const mid = (lo + hi) / 2
+        const x = hermite(a.x, b.x, va.x, vb.x, dt, mid)
+        if ((x > 0) === (a.x > 0)) lo = mid
+        else hi = mid
+      }
+      return hermite(a.y, b.y, va.y, vb.y, dt, (lo + hi) / 2) - COURT.netHeight
     }
   }
   return null
 }
 
-function buildTrajectory(
-  start: Vec3,
-  end: Vec3,
-  horizontalV: number,
-  verticalV0: number,
-  flightT: number,
-): Trajectory {
-  const dx = end.x - start.x
-  const dz = end.z - start.z
-  const span = hypot2(dx, dz)
-  const ux = span > 1e-6 ? dx / span : -1
-  const uz = span > 1e-6 ? dz / span : 0
-
-  const points: Vec3[] = []
-  for (let i = 0; i <= SAMPLES; i++) {
-    const t = (flightT * i) / SAMPLES
-    points.push({
-      x: start.x + ux * horizontalV * t,
-      y: start.y + verticalV0 * t - 0.5 * G * t * t,
-      z: start.z + uz * horizontalV * t,
-    })
-  }
-
-  const speed = Math.hypot(horizontalV, verticalV0)
-  const elevDeg = (Math.atan2(verticalV0, horizontalV) * 180) / Math.PI
-  // 0° = 正朝网（-x 方向）
-  const dirDeg = (Math.acos(Math.max(-1, Math.min(1, -ux))) * 180) / Math.PI
-  const apexY = start.y + (verticalV0 > 0 ? (verticalV0 * verticalV0) / (2 * G) : 0)
-
+function buildTrajectory(start: Vec3, end: Vec3, vh: number, vy: number, flightT: number): Trajectory {
+  const span = Math.hypot(end.x - start.x, end.z - start.z)
+  const ux = (end.x - start.x) / span
+  const uz = (end.z - start.z) / span
+  const flight = integrateBall(vh, vy, flightT, true)
+  const points = flight.states.map(s => ({ x: start.x + ux * s.d, y: start.y + s.y, z: start.z + uz * s.d }))
+  // 反解已将积分端点误差收敛至 1e-8m；固定首尾仅消除浮点残差。
+  points[0] = { ...start }
+  points[points.length - 1] = { ...end }
+  const velocities = flight.states.map(s => ({ x: ux * s.vh, y: s.vy, z: uz * s.vh }))
   return {
-    start,
-    end,
-    points,
-    flightT,
-    speed,
-    horizontalV,
-    verticalV0,
-    elevDeg,
-    dirDeg,
-    apexY,
-    span,
-    netClearance: computeNetClearance(points),
+    start, end, points, velocities, flightT,
+    speed: Math.hypot(vh, vy), horizontalV: vh, verticalV0: vy,
+    elevDeg: Math.atan2(vy, vh) * 180 / Math.PI,
+    dirDeg: Math.acos(Math.max(-1, Math.min(1, -ux))) * 180 / Math.PI,
+    apexY: start.y + flight.apex, span,
+    netClearance: computeNetClearance(points, velocities, flightT),
   }
 }
 
-/** 按弧顶绝对高度求解（闭式解）。要求 apexH 高于出手点与击球点。 */
-export function solveByApex(start: Vec3, end: Vec3, apexH: number): SolveResult {
-  const span = hypot2(end.x - start.x, end.z - start.z)
-  if (span < 0.05) return { status: 'error', message: '目标点与出手点距离过近' }
-  const P0 = apexH - start.y
-  const P1 = apexH - end.y
-  if (P0 <= 0.02 || P1 <= 0.02) return { status: 'error', message: '弧顶高度必须同时高于出手点和击球点' }
-
-  // 铅垂面内 y(d) = H - a(d-dp)²：由两端点条件解出顶点水平位置 dp
-  const dp = (span * Math.sqrt(P0)) / (Math.sqrt(P0) + Math.sqrt(P1))
-  const a = P0 / (dp * dp)
-  // 抛物线在重力下的时间标定：a = g/(2·vh²)
-  const horizontalV = Math.sqrt(G / (2 * a))
-  const verticalV0 = 2 * a * dp * horizontalV
-  const flightT = span / horizontalV
-  return { status: 'ok', traj: buildTrajectory(start, end, horizontalV, verticalV0, flightT) }
-}
-
-/** 按飞行时间求解（唯一解） */
 export function solveByTime(start: Vec3, end: Vec3, flightT: number): SolveResult {
-  const span = hypot2(end.x - start.x, end.z - start.z)
-  if (span < 0.05) return { status: 'error', message: '目标点与出手点距离过近' }
-  if (flightT <= 0.05) return { status: 'error', message: '飞行时间过短' }
-  const dy = end.y - start.y
-  const verticalV0 = dy / flightT + 0.5 * G * flightT
-  const horizontalV = span / flightT
-  return { status: 'ok', traj: buildTrajectory(start, end, horizontalV, verticalV0, flightT) }
+  if (!validPoints(start, end)) return { status: 'error', message: '目标点与出手点距离过近或坐标无效' }
+  if (!Number.isFinite(flightT) || flightT <= 0.05 || flightT > MAX_TIME) return { status: 'error', message: '飞行时间需大于 0.05 秒且不超过 8 秒' }
+  const launch = launchForTime(Math.hypot(end.x - start.x, end.z - start.z), end.y - start.y, flightT)
+  return launch ? { status: 'ok', traj: buildTrajectory(start, end, launch.vh, launch.vy, flightT) } : ERROR
 }
 
-/**
- * 按出手初速度求解目标点的仰角：f(T) = (D/T)² + (dy/T + gT/2)² = v0²
- * f(T) 两端发散、有唯一极小值，因此至多两个根：小 T 为低弧，大 T 为高弧。
- */
+/** 在击球点位于下降段的分支上，反解指定弧顶。 */
+export function solveByApex(start: Vec3, end: Vec3, apexH: number): SolveResult {
+  if (!validPoints(start, end)) return { status: 'error', message: '目标点与出手点距离过近或坐标无效' }
+  const p0 = apexH - start.y
+  const p1 = apexH - end.y
+  if (!Number.isFinite(apexH) || p0 <= 0.02 || p1 <= 0.02) return { status: 'error', message: '弧顶高度必须同时高于出手点和击球点' }
+  const span = Math.hypot(end.x - start.x, end.z - start.z)
+  const dy = end.y - start.y
+  const at = (time: number) => launchForTime(span, dy, time)
+  let lo = 0.051
+  let hi = Math.min(MAX_TIME, Math.sqrt(2 * p0 / G) + Math.sqrt(2 * p1 / G))
+  let upper = at(hi)
+  while (upper && start.y + upper.flight.apex < apexH && hi < MAX_TIME) {
+    hi = Math.min(MAX_TIME, hi * 1.35)
+    upper = at(hi)
+  }
+  if (!upper || start.y + upper.flight.apex < apexH) return ERROR
+  let time = hi
+  for (let i = 0; i < 24; i++) {
+    const launch = at(time)
+    if (!launch) return ERROR
+    const delta = start.y + launch.flight.apex - apexH
+    if (Math.abs(delta) < 1e-7) return { status: 'ok', traj: buildTrajectory(start, end, launch.vh, launch.vy, time) }
+    if (delta < 0) lo = time
+    else hi = time
+    const adjacent = at(time + 0.0001)
+    const slope = adjacent ? (adjacent.flight.apex - launch.flight.apex) / 0.0001 : 0
+    const next = time - delta / slope
+    time = Number.isFinite(next) && next > lo && next < hi ? next : (lo + hi) / 2
+  }
+  return solveByTime(start, end, (lo + hi) / 2)
+}
+
+/** 初速度随飞行时间形成两个分支；先找最低可达球速，再分别求低/高弧。 */
 export function solveBySpeed(start: Vec3, end: Vec3, speed: number, arc: 'low' | 'high'): SolveResult {
-  const span = hypot2(end.x - start.x, end.z - start.z)
-  if (span < 0.05) return { status: 'error', message: '目标点与出手点距离过近' }
-  if (speed <= 0.5) return { status: 'error', message: '球速过小' }
+  if (!validPoints(start, end)) return { status: 'error', message: '目标点与出手点距离过近或坐标无效' }
+  if (!Number.isFinite(speed) || speed <= 0.5) return { status: 'error', message: '球速过小或无效' }
+  const span = Math.hypot(end.x - start.x, end.z - start.z)
   const dy = end.y - start.y
-  const f = (T: number): number => (span / T) ** 2 + (dy / T + 0.5 * G * T) ** 2 - speed * speed
-
-  const tMin = (span / speed) * 1.0001
-  const tMax = 8
-  const STEPS = 600
-  let prevT = tMin
-  let prevF = f(prevT)
-  const roots: number[] = []
-  for (let i = 1; i <= STEPS && roots.length < 2; i++) {
-    const t = tMin + ((tMax - tMin) * i) / STEPS
-    const curF = f(t)
-    const crossing = (prevF > 0 && curF <= 0) || (prevF <= 0 && curF > 0)
-    if (crossing) {
-      // 二分求根（兼容上升沿与下降沿）
-      let lo = prevT
-      let hi = t
-      const signLo = Math.sign(f(lo))
-      for (let k = 0; k < 48; k++) {
-        const mid = (lo + hi) / 2
-        if (Math.sign(f(mid)) === signLo) lo = mid
-        else hi = mid
-      }
-      roots.push((lo + hi) / 2)
+  const minT = Math.max(0.051, span / speed)
+  if (minT >= MAX_TIME) return ERROR
+  const required = (time: number) => {
+    const launch = launchForTime(span, dy, time)
+    return launch ? Math.hypot(launch.vh, launch.vy) : Infinity
+  }
+  let a = minT
+  let b = MAX_TIME
+  const ratio = (Math.sqrt(5) - 1) / 2
+  let c = b - ratio * (b - a)
+  let d = a + ratio * (b - a)
+  let fc = required(c)
+  let fd = required(d)
+  for (let i = 0; i < 32; i++) {
+    if (fc < fd) {
+      b = d; d = c; fd = fc; c = b - ratio * (b - a); fc = required(c)
+    } else {
+      a = c; c = d; fc = fd; d = a + ratio * (b - a); fd = required(d)
     }
-    prevT = t
-    prevF = curF
   }
-  if (roots.length === 0) {
-    return { status: 'error', message: '该球速无法到达目标点，请提高球速或移动目标' }
+  const bestT = (a + b) / 2
+  const bestSpeed = required(bestT)
+  if (bestSpeed > speed + 1e-7) return { status: 'error', message: '该球速无法到达目标点，请提高球速或移动目标' }
+  if (Math.abs(bestSpeed - speed) < 1e-7) return solveByTime(start, end, bestT)
+  let lo = arc === 'low' ? minT : bestT
+  let hi = arc === 'low' ? bestT : MAX_TIME
+  if (arc === 'low' && required(lo) < speed) return ERROR
+  if (required(hi) < speed && arc === 'high') return ERROR
+  for (let i = 0; i < 36; i++) {
+    const mid = (lo + hi) / 2
+    const delta = required(mid) - speed
+    if (Math.abs(delta) < 1e-7) return solveByTime(start, end, mid)
+    if ((delta > 0) === (arc === 'low')) lo = mid
+    else hi = mid
   }
-  const T = arc === 'low' ? roots[0] : roots[roots.length - 1]
-  const horizontalV = span / T
-  const verticalV0 = dy / T + 0.5 * G * T
-  return { status: 'ok', traj: buildTrajectory(start, end, horizontalV, verticalV0, T) }
+  return solveByTime(start, end, (lo + hi) / 2)
 }
 
-/** 取轨迹上 t 时刻的球位置（秒） */
+/** 等时积分点之间用位置与速度插值，播放无需每帧重新求解。 */
 export function sampleAt(traj: Trajectory, t: number): Vec3 {
-  const T = Math.max(1e-6, traj.flightT)
-  const u = Math.max(0, Math.min(1, t / T))
-  const dx = traj.end.x - traj.start.x
-  const dz = traj.end.z - traj.start.z
+  if (t <= 0) return { ...traj.start }
+  if (t >= traj.flightT) return { ...traj.end }
+  const position = t / traj.flightT * (traj.points.length - 1)
+  const i = Math.min(traj.points.length - 2, Math.floor(position))
+  const u = position - i
+  const dt = traj.flightT / (traj.points.length - 1)
+  const a = traj.points[i]
+  const b = traj.points[i + 1]
+  const va = traj.velocities[i]
+  const vb = traj.velocities[i + 1]
   return {
-    x: traj.start.x + dx * u,
-    y: traj.start.y + traj.verticalV0 * (T * u) - 0.5 * G * (T * u) ** 2,
-    z: traj.start.z + dz * u,
+    x: hermite(a.x, b.x, va.x, vb.x, dt, u),
+    y: hermite(a.y, b.y, va.y, vb.y, dt, u),
+    z: hermite(a.z, b.z, va.z, vb.z, dt, u),
   }
 }
 

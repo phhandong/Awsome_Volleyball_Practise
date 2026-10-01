@@ -59,7 +59,8 @@ export function Ball({ traj, attack }: { traj: Trajectory | null; attack: Trajec
     const ux = (active.end.x - active.start.x) / span
     const uz = (active.end.z - active.start.z) / span
     spinAxis.set(uz, 0, -ux).normalize()
-    spinQ.setFromAxisAngle(spinAxis, (active.horizontalV * (playback.t - ph.start)) / BALL_RADIUS)
+    const travelled = ph.kind === 'hold' ? 0 : Math.hypot(p.x - active.start.x, p.z - active.start.z)
+    spinQ.setFromAxisAngle(spinAxis, travelled / BALL_RADIUS)
     m.quaternion.copy(spinQ)
 
     // 按当前时间重采样拖尾，暂停与向前/向后拖动时不残留旧路线。

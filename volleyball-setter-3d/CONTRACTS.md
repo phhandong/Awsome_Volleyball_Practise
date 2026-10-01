@@ -13,7 +13,7 @@
 ## 2. 分层
 
 ```
-src/logic/        纯函数：court(常量/号位)、trajectory(抛物线求解)、presets(风格模板+评分)
+src/logic/        纯函数：court(常量/号位)、ballPhysics(重力/阻力积分)、trajectory(球路求解)、presets(风格模板+评分)
                   —— 不依赖 React/three，全部可 vitest 测试
 src/store/        zustand：sceneStore(球员/参数/画质主题 + 导入导出)、uiStore(相机模式/预设/拖拽)
 src/features/setplay/
@@ -26,11 +26,15 @@ src/features/setplay/
 
 ## 3. 轨迹模型
 
-二传球 = 重力抛物线（`g = 9.81`，无空气阻力），由出手点 `S`、击球点 `E` 加**一个**约束完全确定：
+二传传球与攻手击飞默认使用重力加二次空气阻力：`a = (0,-g,0) - k|v|v`，`g=9.81m/s²`，`k=ρCdπr²/(2m)`。静止空气，质量 `m=0.27kg`、半径 `r=0.105m`、空气密度 `ρ=1.2kg/m³`、有效阻力系数 `Cd=0.4`。质量和尺寸取 [FIVB 2025–2028 规则](https://www.fivb.com/wp-content/uploads/2025/01/FIVB-Volleyball_Rules2025_2028-EN.pdf)范围中值。Cd 是排练用的简化近似，并非上传球型的实测常数；[排球风洞研究](https://commons.nmu.edu/isbs/vol36/iss1/212/)显示阻力会随球型、速度和拼片朝向变化。当前不模拟旋转升力、飘球或风，也不改变人物跳跃模型。
 
-- `solveByApex(S, E, H)`：弧顶绝对高度 H（闭式解，要求 `H > max(Sy, Ey)`）
+出手点 `S`、击球点 `E` 加**一个**约束确定球路：
+
+- `solveByApex(S, E, H)`：弧顶绝对高度 H（数值反解，击球位于下降段，要求 `H > max(Sy, Ey)+0.02m`）
 - `solveByTime(S, E, T)`：飞行时间 T（唯一解）
-- `solveBySpeed(S, E, v0, arc)`：初速度 v0（低弧/高弧两解，扫描+二分求 T）
+- `solveBySpeed(S, E, v0, arc)`：初速度 v0（先求最低可达速度，再二分求低弧/高弧飞行时间；不可达返回错误）
+
+`ballPhysics.ts` 用四阶积分（普通球速步长不超过 10ms），固定时间通过阻尼 Newton 反解初速度，端点积分误差小于 `1e-8m`。支持时间范围 `(0.05,8]s`，无效数值返回错误。`Trajectory.points / velocities` 为等时积分点及对应瞬时速度；`horizontalV` 是水平**初速度**，不是全程匀速。`sampleAt` 用位置和速度做三次 Hermite 插值，动画、拖尾、第一人称跟球、弧顶和过网余量均基于同一模型，击球帧准确等于目标点，击飞起点连续。推荐方案、让位规划和质量检查继续调用同一组求解器。存档仍只保存编辑参数，格式不变。
 
 派生量：`flightT / speed / elevDeg(出手仰角) / dirDeg(0°=朝网) / apexY / netClearance(球路穿网时高于网带的余量，不穿网为 null)`。
 
