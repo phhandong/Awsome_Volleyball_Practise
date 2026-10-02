@@ -3,7 +3,7 @@ import { Html, Line } from '@react-three/drei'
 import type { Trajectory, Vec2 } from '../../../types'
 import type { QualityLevel, QualityReport } from '../../../logic/quality'
 import { useUiStore } from '../../../store/uiStore'
-import { groundMove, stepEnds, footSequenceLabel } from '../../../logic/approach'
+import { footSequenceLabel } from '../../../logic/approach'
 
 const LEVEL_COLOR: Record<QualityLevel, string> = {
   ok: '#7ce6a5',
@@ -68,19 +68,8 @@ export function QualityOverlays({
 
   const netCross = useMemo(() => findNetCross(attack), [attack])
 
-  // 助跑信息：距离、按 0.75m/步折算的步数、步点位置
-  const runInfo = useMemo(() => {
-    const dx = takeoff.x - attackerPos.x
-    const dz = takeoff.z - attackerPos.z
-    const d = Math.hypot(dx, dz)
-    const steps = motion.steps
-    const dots: { x: number; z: number }[] = []
-    for (const u of stepEnds(steps)) {
-      const k = d > 1e-6 ? groundMove(u, d, motion.runT, motion.airSpeed) / d : 0
-      dots.push({ x: attackerPos.x + dx * k, z: attackerPos.z + dz * k })
-    }
-    return { d, steps, dots }
-  }, [attackerPos, takeoff, motion.steps, motion.runT, motion.airSpeed])
+  // Foot markers are actual planned ankle plants, shared with animation and rules.
+  const runInfo = { d: motion.distance, steps: motion.steps, dots: motion.footfalls.map(f => f.position) }
 
   const item = (key: string): QualityReport['items'][number] | undefined =>
     report.items.find((i) => i.key === key)

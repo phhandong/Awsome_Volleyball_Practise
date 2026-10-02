@@ -1,3 +1,4 @@
+import { ArticulatedHand, ArticulatedLeg } from './ArticulatedLimbs'
 import { sampleSetterPose, setterYaw } from '../../../logic/setterMotion'
 import { useMemo, useRef } from 'react'
 import * as THREE from 'three'
@@ -27,10 +28,6 @@ const HAIR_COLORS = ['#221a14', '#2e2218', '#171310', '#3a2a1a', '#241c16', '#1c
 const JERSEY = '#2456b8'
 const JERSEY_LIBERO = '#f2b53d'
 const SHORTS = '#16305f'
-const SHOE = '#eef1f6'
-const SOLE = '#2b3140'
-const KNEEPAD = '#dfe3ec'
-const SOCK = '#f2f4f8'
 
 const TORSO_POINTS = TORSO_PROFILE.map(([x, y]) => new THREE.Vector2(x, y))
 
@@ -72,6 +69,7 @@ export function Players({ flightT, attackT, target, contactH }: PlayersProps) {
 }
 
 interface CharacterProps {
+  showLabel?: boolean
   player: PlayerState
   index: number
   isSetter: boolean
@@ -83,20 +81,17 @@ interface CharacterProps {
   contactH: number
 }
 
-function Character({ player, index, isSetter, isAttacker, hidden, flightT, target, contactH }: CharacterProps) {
+export function Character({ player, index, isSetter, isAttacker, hidden, flightT, target, contactH, showLabel = true }: CharacterProps) {
   const root = useRef<THREE.Group>(null)
   const facing = useRef<THREE.Group>(null)
   const body = useRef<THREE.Group>(null)
+  const pelvis = useRef<THREE.Group>(null)
   const torso = useRef<THREE.Group>(null)
   const roleLabel = useRef<THREE.Group>(null)
   const shoulderL = useRef<THREE.Group>(null)
   const shoulderR = useRef<THREE.Group>(null)
   const elbowL = useRef<THREE.Group>(null)
   const elbowR = useRef<THREE.Group>(null)
-  const hipL = useRef<THREE.Group>(null)
-  const hipR = useRef<THREE.Group>(null)
-  const kneeL = useRef<THREE.Group>(null)
-  const kneeR = useRef<THREE.Group>(null)
 
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
@@ -172,23 +167,22 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
     if (facing.current) facing.current.rotation.y = yawRef.current
     if (body.current) body.current.position.y = cur.rootY
     if (roleLabel.current) roleLabel.current.position.y = 2.02 + cur.rootY
-    if (torso.current) torso.current.rotation.x = cur.torso
+    if (pelvis.current) pelvis.current.rotation.y = cur.pelvisYaw
+    if (torso.current) torso.current.rotation.set(cur.torso, cur.torsoYaw, cur.torsoRoll)
     // 肢体均沿 -Y 方向生长：绕 X 轴 +角度 = 向身后摆，因此姿势定义的"向前"角度在应用时取反
     if (shoulderL.current) {
       shoulderL.current.rotation.x = -cur.shoulderLX
+      shoulderL.current.rotation.y = cur.shoulderLY
       shoulderL.current.rotation.z = cur.shoulderLZ
     }
     if (shoulderR.current) {
       shoulderR.current.rotation.x = -cur.shoulderRX
+      shoulderR.current.rotation.y = cur.shoulderRY
       shoulderR.current.rotation.z = cur.shoulderRZ
     }
     if (elbowL.current) elbowL.current.rotation.x = -cur.elbowL
     if (elbowR.current) elbowR.current.rotation.x = -cur.elbowR
-    if (hipL.current) hipL.current.rotation.x = -cur.hipL
-    if (hipR.current) hipR.current.rotation.x = -cur.hipR
-    if (kneeL.current) kneeL.current.rotation.x = -cur.kneeL
-    if (kneeR.current) kneeR.current.rotation.x = -cur.kneeR
-  })
+  }, -0.5)
 
   const onDragStart = (e: { button: number; stopPropagation: () => void }): void => {
     if (e.button !== 0 || useUiStore.getState().cameraMode === 'pov') return
@@ -214,7 +208,7 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
     >
       <group ref={facing}>
       <group ref={body}>
-        <group position={[0, RIG.hipY, 0]}>
+        <group ref={pelvis} position={[0, RIG.hipY, 0]}>
           {/* 髋部 / 短裤 */}
           <mesh castShadow position={[0, 0.03, 0]}>
             <capsuleGeometry args={[0.125, 0.09, 6, 16]} />
@@ -306,14 +300,12 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
                 <meshStandardMaterial color={jersey} roughness={0.68} />
               </mesh>
               <group ref={elbowL} position={[0, -RIG.upperArm, 0]}>
+                <mesh castShadow><sphereGeometry args={[0.047,10,8]}/><meshStandardMaterial color={skin} roughness={0.6}/></mesh>
                 <mesh castShadow position={[0, -0.115, 0]}>
                   <capsuleGeometry args={[0.044, 0.14, 4, 12]} />
                   <meshStandardMaterial color={skin} roughness={0.55} />
                 </mesh>
-                <mesh position={[0, -RIG.forearm, 0]}>
-                  <sphereGeometry args={[RIG.handRadius, 12, 10]} />
-                  <meshStandardMaterial color={skin} roughness={0.55} />
-                </mesh>
+                <ArticulatedHand side="L" pose={current} skin={skin}/>
               </group>
             </group>
 
@@ -324,83 +316,18 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
                 <meshStandardMaterial color={jersey} roughness={0.68} />
               </mesh>
               <group ref={elbowR} position={[0, -RIG.upperArm, 0]}>
+                <mesh castShadow><sphereGeometry args={[0.047,10,8]}/><meshStandardMaterial color={skin} roughness={0.6}/></mesh>
                 <mesh castShadow position={[0, -0.115, 0]}>
                   <capsuleGeometry args={[0.044, 0.14, 4, 12]} />
                   <meshStandardMaterial color={skin} roughness={0.55} />
                 </mesh>
-                <mesh position={[0, -RIG.forearm, 0]}>
-                  <sphereGeometry args={[RIG.handRadius, 12, 10]} />
-                  <meshStandardMaterial color={skin} roughness={0.55} />
-                </mesh>
+                <ArticulatedHand side="R" pose={current} skin={skin}/>
               </group>
             </group>
           </group>
 
-          {/* 腿（裤腿 + 大腿 + 护膝 + 小腿 + 球袜 + 球鞋） */}
-          <group ref={hipL} position={[0.095, -0.02, 0]}>
-            <mesh castShadow position={[0, -0.21, 0]}>
-              <capsuleGeometry args={[0.068, 0.26, 4, 12]} />
-              <meshStandardMaterial color={skin} roughness={0.6} />
-            </mesh>
-            <mesh castShadow position={[0, -0.05, 0]}>
-              <cylinderGeometry args={[0.085, 0.08, 0.13, 14]} />
-              <meshStandardMaterial color={SHORTS} roughness={0.75} />
-            </mesh>
-            <group ref={kneeL} position={[0, -0.44, 0]}>
-              <mesh castShadow position={[0, -0.02, 0.02]}>
-                <capsuleGeometry args={[0.062, 0.08, 4, 12]} />
-                <meshStandardMaterial color={KNEEPAD} roughness={0.5} />
-              </mesh>
-              <mesh castShadow position={[0, -0.16, 0]}>
-                <capsuleGeometry args={[0.05, 0.22, 4, 12]} />
-                <meshStandardMaterial color={skin} roughness={0.6} />
-              </mesh>
-              <mesh position={[0, -0.315, 0]}>
-                <cylinderGeometry args={[0.053, 0.053, 0.1, 12]} />
-                <meshStandardMaterial color={SOCK} roughness={0.8} />
-              </mesh>
-              <mesh castShadow position={[0, -0.4, 0.045]}>
-                <boxGeometry args={[0.105, 0.062, 0.2]} />
-                <meshStandardMaterial color={SHOE} roughness={0.45} />
-              </mesh>
-              <mesh position={[0, -0.442, 0.045]}>
-                <boxGeometry args={[0.115, 0.028, 0.215]} />
-                <meshStandardMaterial color={SOLE} roughness={0.6} />
-              </mesh>
-            </group>
-          </group>
-          <group ref={hipR} position={[-0.095, -0.02, 0]}>
-            <mesh castShadow position={[0, -0.21, 0]}>
-              <capsuleGeometry args={[0.068, 0.26, 4, 12]} />
-              <meshStandardMaterial color={skin} roughness={0.6} />
-            </mesh>
-            <mesh castShadow position={[0, -0.05, 0]}>
-              <cylinderGeometry args={[0.085, 0.08, 0.13, 14]} />
-              <meshStandardMaterial color={SHORTS} roughness={0.75} />
-            </mesh>
-            <group ref={kneeR} position={[0, -0.44, 0]}>
-              <mesh castShadow position={[0, -0.02, 0.02]}>
-                <capsuleGeometry args={[0.062, 0.08, 4, 12]} />
-                <meshStandardMaterial color={KNEEPAD} roughness={0.5} />
-              </mesh>
-              <mesh castShadow position={[0, -0.16, 0]}>
-                <capsuleGeometry args={[0.05, 0.22, 4, 12]} />
-                <meshStandardMaterial color={skin} roughness={0.6} />
-              </mesh>
-              <mesh position={[0, -0.315, 0]}>
-                <cylinderGeometry args={[0.053, 0.053, 0.1, 12]} />
-                <meshStandardMaterial color={SOCK} roughness={0.8} />
-              </mesh>
-              <mesh castShadow position={[0, -0.4, 0.045]}>
-                <boxGeometry args={[0.105, 0.062, 0.2]} />
-                <meshStandardMaterial color={SHOE} roughness={0.45} />
-              </mesh>
-              <mesh position={[0, -0.442, 0.045]}>
-                <boxGeometry args={[0.115, 0.028, 0.215]} />
-                <meshStandardMaterial color={SOLE} roughness={0.6} />
-              </mesh>
-            </group>
-          </group>
+          <ArticulatedLeg side="L" pose={current} skin={skin}/>
+          <ArticulatedLeg side="R" pose={current} skin={skin}/>
         </group>
       </group>
       </group>
@@ -419,12 +346,12 @@ function Character({ player, index, isSetter, isAttacker, hidden, flightT, targe
       ) : null}
 
       {/* 职能名称跟随起跳高度，并始终朝向相机 */}
-      <Billboard ref={roleLabel} position={[0, 2.02, 0]}>
+      {showLabel && <Billboard ref={roleLabel} position={[0, 2.02, 0]}>
         <mesh>
           <planeGeometry args={[1.04, 0.26]} />
           <meshBasicMaterial map={roleTex} transparent depthWrite={false} />
         </mesh>
-      </Billboard>
+      </Billboard>}
     </group>
   )
 }

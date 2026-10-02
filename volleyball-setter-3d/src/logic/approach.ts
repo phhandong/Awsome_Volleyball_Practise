@@ -1,7 +1,7 @@
 import type { ApproachSteps, Vec2, ZoneId } from '../types'
 import { isBackRow } from './court'
-import { BALL_RADIUS, handLocal, RIG, rotateY } from './rig'
-import { POSES } from '../features/setplay/scene/poses'
+import { BALL_RADIUS, handPoint, PALM_PAD, RIG, rotateY } from './rig'
+import { ATTACK_POSES } from './attackPoses'
 export const ATTACK_YAW = -Math.PI / 2
 export const AIR_SPEED = { front: 1.3, back: 2.2 } as const
 const G = 9.81
@@ -9,7 +9,7 @@ const LAND_BRAKE_T = 0.2
 export const footSequence = (steps: ApproachSteps): ('L' | 'R')[] => steps === 2 ? ['R', 'L'] : steps === 3 ? ['L', 'R', 'L'] : ['R', 'L', 'R', 'L']
 export const footSequenceLabel = (steps: ApproachSteps): string => footSequence(steps).map(f => f === 'L' ? '左' : '右').join('—')
 // 起动、加速、最后两步制动；时间比例为排练模型参数。
-export const stepEnds = (steps: ApproachSteps): number[] => steps === 2 ? [0.72, 1] : steps === 3 ? [0.45, 0.82, 1] : [0.25, 0.52, 0.85, 1]
+export const stepEnds = (steps: ApproachSteps): number[] => steps === 2 ? [0.62, 0.86] : steps === 3 ? [0.27, 0.68, 0.87] : [0.18, 0.42, 0.72, 0.88]
 export function groundMove(u: number, distance: number, duration: number, endSpeed: number): number {
   return distance * (3 * u * u - 2 * u ** 3) + duration * endSpeed * (u ** 3 - u * u)
 }
@@ -22,6 +22,9 @@ export function groundPeakSpeed(distance: number, duration: number, endSpeed: nu
 }
 
 export interface AttackerPlan {
+  footfalls: Footfall[]
+  initialFeet: Record<'L' | 'R', Vec2>
+  events: { load: number; cock: number; accelerate: number; contact: number }
   stand: Vec2
   contactRoot: Vec2
   takeoffRoot: Vec2
@@ -38,6 +41,7 @@ export interface AttackerPlan {
   landingT: number
   brakeT: number
   jumpH: number
+  launchY: number
   steps: ApproachSteps
   runT: number
   requiredRunT: number
@@ -46,17 +50,27 @@ export interface AttackerPlan {
   takeoffFootX: number
 }
 
+export interface Footfall {
+  side: 'L' | 'R'
+  position: Vec2
+  yaw: number
+  liftT: number
+  plantT: number
+  releaseT: number
+}
+
 export function planAttacker(stand: Vec2, target: Vec2, contactH: number, flightT: number, steps: ApproachSteps = 3, rotationZone: ZoneId = 4, hold = 0.6): AttackerPlan {
-  const hand = handLocal(POSES.spikeJump, 'R')
-  // 球在右手前方，两球体表面接触；偏移沿击球朝向，而非助跑方向。
-  hand.z += BALL_RADIUS + RIG.handRadius
+  const hand = handPoint(ATTACK_POSES.contact, 'R', PALM_PAD)
+  // 球在右手掌面前方，实际掌垫与球面接触；偏移沿击球朝向，而非助跑方向。
+  hand.z += BALL_RADIUS
   const hitHand = rotateY(hand, ATTACK_YAW)
   const contactRoot = { x: target.x - hitHand.x, z: target.z - hitHand.z }
   const dx = contactRoot.x - stand.x
   const dz = contactRoot.z - stand.z
   const toContact = Math.hypot(dx, dz)
   const dir = toContact > 1e-6 ? { x: dx / toContact, z: dz / toContact } : { x: -1, z: 0 }
-  const jumpH = Math.max(0, contactH - hand.y)
+  const launchY = -0.012
+  const jumpH = Math.max(0, contactH - hand.y - launchY)
   const contactT = hold + flightT
   // 击球在跳跃顶点；上升、下降使用相同重力，腾空时间由跳高决定。
   const riseT = Math.max(0.02, Math.sqrt(2 * jumpH / G))
@@ -89,15 +103,39 @@ export function planAttacker(stand: Vec2, target: Vec2, contactH: number, flight
   const runT = Math.max(1e-6, takeoffT - startT)
   const peakSpeed = groundPeakSpeed(distance, runT, airSpeed)
   const timingDelta = takeoffT - requiredRunT
-  // 当前双脚起跳姿势的鞋底前缘（与 Characters 的髋、膝、鞋底尺寸共用）。
-  const footZ = 0.44 * Math.sin(POSES.spikeJump.hipL)
-    + 0.442 * Math.sin(POSES.spikeJump.hipL + POSES.spikeJump.kneeL)
-    + 0.045 * Math.cos(POSES.spikeJump.hipL + POSES.spikeJump.kneeL)
-  const footExtent = 0.1075 * Math.abs(Math.cos(POSES.spikeJump.hipL + POSES.spikeJump.kneeL))
-    + 0.014 * Math.abs(Math.sin(POSES.spikeJump.hipL + POSES.spikeJump.kneeL))
-  const takeoffFootX = takeoffRoot.x - footZ - footExtent
+  const runYaw = toContact > 1e-6 ? Math.atan2(dx,dz) : ATTACK_YAW
+  const offset=(base:Vec2,side:'L'|'R',yaw:number,forward=0):Vec2=>{
+    const p=rotateY({x:(side==='L'?1:-1)*RIG.hipX,y:0,z:forward},yaw)
+    return {x:base.x+p.x,z:base.z+p.z}
+  }
+  const initialFeet={L:offset(stand,'L',runYaw),R:offset(stand,'R',runYaw)}
+  const ends=stepEnds(steps),sequence=footSequence(steps)
+  const footfalls:Footfall[]=sequence.map((side,i)=>{
+    const plant=ends[i], previous=i?ends[i-1]:0
+    const d=groundMove(plant,distance,runT,airSpeed)
+    const base={x:stand.x+dir.x*d,z:stand.z+dir.z*d}
+    const final=i>=steps-2
+    const yaw=final ? ATTACK_YAW+ATTACK_POSES.takeoff.pelvisYaw : runYaw
+    // Final pair straddles the actual launch root; earlier plants lead the moving COM.
+    const position=final ? offset(takeoffRoot,side,yaw,side==='L'?0.045:-0.025)
+      : offset(base,side,yaw,Math.min(0.18,distance/(steps*3)))
+    const liftT=startT+runT*(i===0?0:previous-0.22)
+    return {side,position,yaw,liftT:Math.max(startT,liftT),plantT:startT+plant*runT,releaseT:takeoffT}
+  })
+  // Release the trailing foot before the COM outruns a fixed-length leg.
+  footfalls.forEach((f,i)=>{
+    const previous=footfalls.slice(0,i).filter(n=>n.side===f.side).at(-1)
+    const anchor=previous?.position ?? initialFeet[f.side]
+    const supportTravel=(anchor.x-stand.x)*dir.x+(anchor.z-stand.z)*dir.z+0.30
+    let low=0,high=1
+    for(let n=0;n<30;n++){const mid=(low+high)/2;if(groundMove(mid,distance,runT,airSpeed)>supportTravel)high=mid;else low=mid}
+    f.liftT=Math.max(previous?.plantT ?? startT,Math.min(f.liftT,startT+runT*high))
+  })
+  footfalls.forEach((f,i)=>{const next=footfalls.slice(i+1).find(n=>n.side===f.side);if(next)f.releaseT=next.liftT})
+  const takeoffFootX=Math.min(...footfalls.slice(-2).map(f=>f.position.x+0.045*Math.sin(f.yaw)
+    -0.1075*Math.abs(Math.sin(f.yaw))-0.0575*Math.abs(Math.cos(f.yaw))))
   return { stand, contactRoot, takeoffRoot, landingRoot, airVelocity, airSpeed,
-    runYaw: toContact > 1e-6 ? Math.atan2(dx, dz) : ATTACK_YAW,
-    distance, steps, runT, requiredRunT, peakSpeed, timingDelta, takeoffFootX, startT, takeoffT, contactT, riseT, fallT, landingT, brakeT, jumpH }
+    runYaw, footfalls, initialFeet, events:{load:footfalls[steps-2].plantT,cock:takeoffT+riseT*0.56,accelerate:takeoffT+riseT*0.84,contact:contactT},
+    distance, steps, runT, requiredRunT, peakSpeed, timingDelta, takeoffFootX, startT, takeoffT, contactT, riseT, fallT, landingT, brakeT, jumpH, launchY }
 }
 

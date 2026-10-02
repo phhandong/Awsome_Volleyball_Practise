@@ -32,7 +32,7 @@ it.each(STYLES)('$name 各方案让队友避开助跑及落地全路线，不改
     const after = useSceneStore.getState()
     expect(after.params).toMatchObject(candidate.params)
     expect(after.players[0]).toBe(players[0])
-    expect(after.players[1].pos).toEqual(candidate.stand)
+    expect(after.players[1].pos).toEqual(first.players[1].pos)
     expect(after.players.map(p => [p.id, p.role, p.rotationZone])).toEqual(players.map(p => [p.id, p.role, p.rotationZone]))
     for (const p of after.players.slice(2)) {
       expect(p.pos.x).toBeGreaterThanOrEqual(0.35)

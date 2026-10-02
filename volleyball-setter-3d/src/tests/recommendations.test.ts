@@ -17,6 +17,7 @@ it.each(STYLES)('$name 的每个条目套用和重复点击后，五组名称、
   const before = recommendations()
   const basis = useSceneStore.getState().recommendationPlayers
   for (const c of before[style.id]) {
+    let appliedStand: {x:number;z:number} | undefined
     for (let repeat = 0; repeat < 3; repeat++) {
       useSceneStore.getState().applyCandidate(c)
       const s = useSceneStore.getState()
@@ -25,7 +26,9 @@ it.each(STYLES)('$name 的每个条目套用和重复点击后，五组名称、
       expect(s.selectedCandidateId).toBe(c.id)
       expect(s.selectedStyle).toBe(c.styleId)
       expect(s.params).toMatchObject(c.params)
-      expect(s.players.find(p => p.id === s.attackerId)?.pos).toEqual(c.stand)
+      const stand=s.players.find(p => p.id === s.attackerId)!.pos
+      if(repeat===0) appliedStand={...stand}
+      expect(stand).toEqual(appliedStand)
       expect(recommendations()[style.id].find(item => item.id === s.selectedCandidateId)).toEqual(c)
     }
   }

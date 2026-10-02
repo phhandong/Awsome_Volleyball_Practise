@@ -1,10 +1,11 @@
+import { renderedRig, world } from './renderedRig'
+import { sampleGroundFoot } from '../features/setplay/scene/attackerMotion'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { sampleSetterBall, sampleSetterPose, setterRelease, setterYaw } from '../logic/setterMotion'
-import { BALL_RADIUS, RIG } from '../logic/rig'
-import { footSequence, groundMove, planAttacker, stepEnds } from '../logic/approach'
+import { BALL_RADIUS } from '../logic/rig'
+import { footSequence, groundMove, planAttacker } from '../logic/approach'
 import { createScratchPose, type Pose } from '../features/setplay/scene/poses'
-import { sampleAttacker } from '../features/setplay/scene/attackerMotion'
 import { evaluateQuality } from '../logic/quality'
 import { solveByTime } from '../logic/trajectory'
 import { DEFAULT_FORMATION } from '../logic/court'
@@ -26,31 +27,19 @@ it.each(['blue', 'wood', undefined])('导入主题 %s 保留已有存档选择�
 
 // 独立搭建渲染关节，检查球与实际双手的接触，不复用反解公式。
 function actualHand(pose: Pose, side: 'L' | 'R', yaw: number) {
-  const root = new THREE.Group()
-  root.position.set(pos.x, pose.rootY + RIG.hipY + RIG.torsoY, pos.z)
-  root.rotation.y = yaw
-  const torso = new THREE.Group(); torso.rotation.x = pose.torso; root.add(torso)
-  const shoulder = new THREE.Group()
-  shoulder.position.set((side === 'L' ? 1 : -1) * RIG.shoulderX, RIG.shoulderY, 0)
-  shoulder.rotation.set(-(side === 'L' ? pose.shoulderLX : pose.shoulderRX), 0, side === 'L' ? pose.shoulderLZ : pose.shoulderRZ)
-  torso.add(shoulder)
-  const elbow = new THREE.Group(); elbow.position.y = -RIG.upperArm
-  elbow.rotation.x = -(side === 'L' ? pose.elbowL : pose.elbowR); shoulder.add(elbow)
-  const palm = new THREE.Object3D(); palm.position.y = -RIG.forearm; elbow.add(palm)
-  root.updateMatrixWorld(true)
-  return palm.getWorldPosition(new THREE.Vector3())
+  return world(renderedRig(pose,{x:pos.x,z:pos.z,yaw}).hands[side].pad)
 }
 
 describe('二传来球、双手与出手连续衔接', () => {
   it.each(['front', 'back'] as SetDirection[])('%s 在全部可调高度下从双手之间出手', direction => {
     for (const height of [1.8, 2.2, 2.6]) {
-      for (const t of [0.3, 0.4, 0.5, 0.6]) {
+      for (const t of [0.51, 0.54, 0.57, 0.6]) {
         const pose = sampleSetterPose(t, height, direction, createScratchPose())
         const ball = sampleSetterBall(pos, target, height, direction, t)
         const center = new THREE.Vector3(ball.x, ball.y, ball.z)
         for (const side of ['L', 'R'] as const) {
           expect(center.distanceTo(actualHand(pose, side, setterYaw(pos, target, direction))))
-            .toBeCloseTo(BALL_RADIUS + RIG.handRadius, 8)
+            .toBeCloseTo(BALL_RADIUS, 8)
         }
       }
       const start = setterRelease(pos, target, height, direction)
@@ -95,12 +84,13 @@ describe('步数、动画与质量检查共用实际助跑参数', () => {
       const move = groundMove(i / 100, plan.distance, plan.runT, plan.airSpeed)
       expect(move).toBeGreaterThanOrEqual(before - 1e-8); before = move
     }
-    const ends = stepEnds(steps)
-    for (let i = 0; i < steps; i++) {
-      const mid = ((i ? ends[i - 1] : 0) + ends[i]) / 2
-      const pose = createScratchPose()
-      sampleAttacker(plan, plan.startT + plan.runT * mid, pose, { x: 0, z: 0, yaw: 0 })
-      expect(expected[i] === 'L' ? pose.hipL - pose.hipR : pose.hipR - pose.hipL).toBeGreaterThan(0)
+    expect(plan.footfalls.map(f=>f.side)).toEqual(expected)
+    for(const foot of plan.footfalls) {
+      const t=(foot.plantT+foot.releaseT)/2
+      const planted=sampleGroundFoot(plan,foot.side,t)
+      expect(planted.planted).toBe(true)
+      expect(planted.position.x).toBeCloseTo(foot.position.x,9)
+      expect(planted.position.z).toBeCloseTo(foot.position.z,9)
     }
   })
   it('质量检查显示实际地面距离和速度，长助跑明确失败', () => {

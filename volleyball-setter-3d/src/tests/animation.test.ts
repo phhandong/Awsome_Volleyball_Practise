@@ -1,7 +1,8 @@
+import { renderedRig, world } from './renderedRig'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import { advancePlayback, cycleLength, playback, sampleBall } from '../features/setplay/animation'
-import { AIR_SPEED, BALL_RADIUS, planAttacker, RIG, sampleAttacker, type AttackerFrame } from '../features/setplay/scene/attackerMotion'
+import { AIR_SPEED, BALL_RADIUS, planAttacker, sampleAttacker, type AttackerFrame } from '../features/setplay/scene/attackerMotion'
 import { createScratchPose, type Pose } from '../features/setplay/scene/poses'
 import { computeAttackRoute, sampleAt, solveByApex, solveByTime } from '../logic/trajectory'
 import { generateRoutes } from '../logic/presets'
@@ -20,34 +21,7 @@ function frameAt(plan: ReturnType<typeof planAttacker>, t: number) {
 
 // 使用实际渲染关节的父子层级求世界坐标，避免只检验定位公式自身。
 function renderedHand(pose: Pose, frame: AttackerFrame): THREE.Vector3 {
-  const root = new THREE.Group()
-  root.position.set(frame.x, 0, frame.z)
-  const facing = new THREE.Group()
-  facing.rotation.y = frame.yaw
-  root.add(facing)
-  const body = new THREE.Group()
-  body.position.y = pose.rootY
-  facing.add(body)
-  const hips = new THREE.Group()
-  hips.position.y = RIG.hipY
-  body.add(hips)
-  const torso = new THREE.Group()
-  torso.position.y = RIG.torsoY
-  torso.rotation.x = pose.torso
-  hips.add(torso)
-  const shoulder = new THREE.Group()
-  shoulder.position.set(-RIG.shoulderX, RIG.shoulderY, 0)
-  shoulder.rotation.set(-pose.shoulderRX, 0, pose.shoulderRZ)
-  torso.add(shoulder)
-  const elbow = new THREE.Group()
-  elbow.position.y = -RIG.upperArm
-  elbow.rotation.x = -pose.elbowR
-  shoulder.add(elbow)
-  const hand = new THREE.Object3D()
-  hand.position.y = -RIG.forearm
-  elbow.add(hand)
-  root.updateMatrixWorld(true)
-  return hand.getWorldPosition(new THREE.Vector3())
+  return world(renderedRig(pose,frame).hands.R.palm)
 }
 
 function checkContact(stand: Vec2, target: Vec2, contactH: number, apexH: number) {
@@ -63,7 +37,7 @@ function checkContact(stand: Vec2, target: Vec2, contactH: number, apexH: number
   expect(ball.x).toBeCloseTo(target.x, 10)
   expect(ball.y).toBeCloseTo(contactH, 10)
   expect(ball.z).toBeCloseTo(target.z, 10)
-  expect(center.distanceTo(hand)).toBeCloseTo(BALL_RADIUS + RIG.handRadius, 10)
+  expect(center.distanceTo(hand)).toBeCloseTo(BALL_RADIUS, 10)
   expect(hand.y).toBeCloseTo(ball.y, 10)
   expect(hand.x).toBeGreaterThan(ball.x) // 球在面向球网的手掌前方
   expect(hand.z).toBeCloseTo(ball.z, 10)
@@ -112,7 +86,7 @@ describe('攻手助跑与触球', () => {
     expect(after.pose.rootY).toBeCloseTo(strike.pose.rootY, 6)
     expect(after.pose.rootY).toBeGreaterThan(0.5)
     expect(frameAt(plan, plan.contactT - 1e-6).pose.rootY).toBeCloseTo(strike.pose.rootY, 6)
-    expect(frameAt(plan, plan.contactT + plan.fallT).pose.rootY).toBeCloseTo(0, 10)
+    expect(frameAt(plan, plan.contactT + plan.fallT).pose.rootY).toBeCloseTo(plan.launchY, 10)
   })
 
   it('快球可在出手前开始助跑，高球可延后起动', () => {
@@ -190,7 +164,7 @@ describe('腾空水平速度', () => {
       const down = frameAt(plan, plan.landingT - plan.fallT * u).pose.rootY
       expect(up).toBeCloseTo(down, 10)
     }
-    expect(frameAt(plan, plan.contactT).pose.rootY).toBeCloseTo(plan.jumpH, 10)
+    expect(frameAt(plan, plan.contactT).pose.rootY).toBeCloseTo(plan.launchY + plan.jumpH, 10)
   })
 
   it('贴网高球在起跳前降低速度，腾空仍匀速，落地制动后不会越过球网', () => {
@@ -220,7 +194,7 @@ describe('共享播放时钟', () => {
       const { frame, pose } = frameAt(plan, playback.t)
       const p = sampleBall(pass.traj, attack, playback.t)
       expect(renderedHand(pose, frame).distanceTo(new THREE.Vector3(p.x, p.y, p.z)))
-        .toBeCloseTo(BALL_RADIUS + RIG.handRadius, 8)
+        .toBeCloseTo(BALL_RADIUS, 8)
       expect(p.y).toBeCloseTo(sampleAt(pass.traj, pass.traj.flightT).y, 8)
     }
   })
