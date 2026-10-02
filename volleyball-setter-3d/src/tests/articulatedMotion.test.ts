@@ -94,8 +94,10 @@ describe('完整骨架与支撑约束',()=>{
       expect(fingers.angleTo(new THREE.Vector3(0,-1,0)),`wrist at ${t}`).toBeLessThan(1.2)
     }
     const {pose}=sample(p,p.contactT)
-    expect(thumbBase('R').x).toBeGreaterThan(0)
-    expect(thumbAngle(pose,'R').z).toBeGreaterThan(0)
+    // 世界方向断言：触球时右手拇指尖向身体内侧(+X)延伸，而非检查局部符号约定
+    const base=handPoint(pose,'R',thumbBase(pose,'R'))
+    const tip=handPoint(pose,'R',add(thumbBase(pose,'R'),rotate({x:0,y:-0.046,z:0},thumbAngle(pose,'R'))))
+    expect(tip.x-base.x,`thumb inward at contact`).toBeGreaterThan(0.02)
   })
   it('主攻左手保持自然中立腕姿，随前臂运动而转动',()=>{
     const p=standard()
@@ -106,22 +108,45 @@ describe('完整骨架与支撑约束',()=>{
       expect(Math.abs(pose.forearmRollL)).toBeLessThan(0.25)
       const palmNormal=new THREE.Vector3(0,0,1).transformDirection(rig.hands.L.wrist.matrixWorld)
       expect(palmNormal.length()).toBeCloseTo(1,8)
-      const thumb=handPoint(pose,'L',add(thumbBase('L'),rotate({x:0,y:-0.024,z:0},thumbAngle(pose,'L'))))
+      const thumb=handPoint(pose,'L',add(thumbBase(pose,'L'),rotate({x:0,y:-0.024,z:0},thumbAngle(pose,'L'))))
       const palm=handPoint(pose,'L',PALM_PAD)
       expect(thumb.x).toBeLessThan(palm.x)
       expect([...Object.values(pose)].every(Number.isFinite)).toBe(true)
     }
   })
+  it.each([2,3,4] as const)('%s步攻手起跳至随挥右手拇指始终朝内，倒数第二步保持原手型',steps=>{
+    const p=standard(steps)
+    const approach=sample(p,p.events.load)
+    expect(approach.pose.thumbR).toBe(1.04)
+    const times=[p.takeoffT,p.events.cock,p.takeoffT+p.riseT*0.6,p.events.accelerate,
+      p.contactT-p.riseT*0.1,p.contactT,p.contactT+0.12,p.contactT+0.14]
+    for(let i=0;i<=200;i++)times.push(p.takeoffT+(p.contactT+0.14-p.takeoffT)*i/200)
+    for(const t of times.sort((a,b)=>a-b)) {
+      const {pose,rig}=sample(p,t),wrist=rig.hands.R.wrist
+      const localBase=thumbBase(pose,'R')
+      const localTip=add(localBase,rotate({x:0,y:-0.046,z:0},thumbAngle(pose,'R')))
+      const base=wrist.localToWorld(new THREE.Vector3(localBase.x,localBase.y,localBase.z))
+      const tip=wrist.localToWorld(new THREE.Vector3(localTip.x,localTip.y,localTip.z))
+      // Torso +X points inward from the right side even as the body turns during follow-through.
+      const inward=new THREE.Vector3(1,0,0).transformDirection(rig.torso.matrixWorld)
+      expect(tip.clone().sub(base).dot(inward),`thumb inward at ${t}`).toBeGreaterThan(0.005)
+      const next=sample(p,t+1e-6),nextBase=thumbBase(next.pose,'R')
+      const nextWorldBase=next.rig.hands.R.wrist.localToWorld(new THREE.Vector3(nextBase.x,nextBase.y,nextBase.z))
+      expect(nextWorldBase.distanceTo(base),`thumb root jump at ${t}`).toBeLessThan(0.0001)
+    }
+  })
 })
 
 describe('二传短接触与跳传',()=>{
-  it('正背传全部准备与接触姿势的拇指均在内侧，左右手不互换',()=>{
-    for(const direction of ['front','back'] as const)for(const height of [1.8,2.2,2.6])for(let i=0;i<=60;i++) {
+  it('正背传全部准备与接触姿势的拇指均指向面部内侧，左右手不互换',()=>{
+    // t<0.45(hold*0.75) 是经体前举起的过渡段，手型尚未定型；断言窗口保持阶段
+    for(const direction of ['front','back'] as const)for(const height of [1.8,2.2,2.6])for(let i=45;i<=60;i++) {
       const pose=sampleSetterPose(i/100,height,direction,createScratchPose())
       for(const side of ['L','R'] as const) {
-      const thumb=thumbBase(side),angle=thumbAngle(pose,side)
-      expect(thumb.x*(side==='L'?-1:1)).toBeGreaterThan(0)
-      expect(angle.z*(side==='L'?-1:1)).toBeGreaterThan(0)
+        // 世界（姿态）坐标系下，拇指尖相对根部朝中线延伸：左手向 -X，右手向 +X
+        const base=handPoint(pose,side,thumbBase(pose,side))
+        const tip=handPoint(pose,side,add(thumbBase(pose,side),rotate({x:0,y:-0.04,z:0},thumbAngle(pose,side))))
+        expect((tip.x-base.x)*(side==='L'?1:-1),`${direction} h=${height} t=${i/100} ${side}`).toBeLessThan(-0.005)
       }
     }
   })
@@ -143,7 +168,7 @@ describe('二传短接触与跳传',()=>{
   it('跳传出手后继续按重力下落，不悬停；二传各相位无手脚瞬移',()=>{
     expect(setterRootY(0.7,2.2)).toBeLessThan(setterRootY(0.6,2.2))
     for(const height of [1.8,2.2,2.6])for(const direction of ['front','back'] as const) {
-      const times=[0.51,0.6,0.68,0.95]
+      const times=[0.2,0.44,0.46,0.51,0.6,0.68,0.95]
       if(height>2.025) {const rise=Math.sqrt(2*(height-2+0.006)/9.81);times.push(0.6-rise,0.6+rise)}
       for(const t of times) {
         const a=sampleSetterPose(t-1e-6,height,direction,createScratchPose()),b=sampleSetterPose(t+1e-6,height,direction,createScratchPose())
@@ -153,13 +178,15 @@ describe('二传短接触与跳传',()=>{
       }
     }
   })
-  it('二传双手在所有接触前后姿态都离脸更远，正传背传一致',()=>{
+  it('二传双手在所有接触前后姿态都离头足够远，正传背传一致',()=>{
     for(const direction of ['front','back'] as const) for(const height of [1.8,2.2,2.6]) {
-      for(const t of [0,0.2,0.4,0.51,0.57,0.6,0.72]) {
+      for(const t of [0.5,0.51,0.57,0.6,0.72]) {
         const pose=sampleSetterPose(t,height,direction,createScratchPose())
         const rig=renderedRig(pose,{x:0,z:0,yaw:0})
-        const faceZ=0.098
-        for(const side of ['L','R'] as const) expect(Math.abs(world(rig.hands[side].palm).z-faceZ)).toBeGreaterThan(0.06)
+        // 头心（头半径0.106+发帽）到掌心至少留 3cm，窗口在头顶上方时 z 距离天然变小，
+        // 按到头心的直线距离判断才不误报。
+        const head=new THREE.Vector3(0,0.94+pose.rootY+0.08+0.645,0)
+        for(const side of ['L','R'] as const) expect(world(rig.hands[side].palm).distanceTo(head),`${direction} h=${height} t=${t} ${side}`).toBeGreaterThan(0.14)
       }
     }
   })

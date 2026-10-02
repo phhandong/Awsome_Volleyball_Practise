@@ -24,9 +24,11 @@ export function ArticulatedHand({side,pose,skin}:{side:Side;pose:RefObject<Pose>
       if(tips.current[i]) tips.current[i]!.rotation.x=-p[`curl${side}`]*0.7
     })
     const a=thumbAngle(p,side)
+    const tb=thumbBase(p,side)
+    thumb.current?.position.set(tb.x,tb.y,tb.z)
     thumb.current?.rotation.set(a.x,a.y,a.z)
   },-0.4)
-  const base=thumbBase(side)
+  const base=thumbBase(pose.current,side)
   return <group ref={forearm} position={[0,-RIG.forearm,0]}><group ref={wrist}>
     <mesh geometry={palmGeometry} material={material} position={[0,-0.039,0]} scale={[0.045,0.048,0.019]}/>
     {FINGERS.map((finger,i)=>{const base=fingerBase(side,i),half=finger.length/2;return <group key={i} ref={g=>{fingers.current[i]=g}} position={[base.x,base.y,base.z]}>

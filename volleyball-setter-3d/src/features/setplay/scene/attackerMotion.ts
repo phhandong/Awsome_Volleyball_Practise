@@ -63,7 +63,7 @@ export function sampleAttacker(plan:AttackerPlan,t:number,pose:Pose,out:Attacker
     const loadU=(plan.events.load-plan.startT)/plan.runT
     if(runU<loadU) {
       blendPose(pose,ATTACK_POSES.ready,ATTACK_POSES.run,smooth(runU/0.18))
-      const swing=Math.sin(runU*Math.PI*plan.steps*2)*0.35
+      const swing=Math.sin(runU*Math.PI*plan.steps)*0.35
       pose.shoulderLX+=swing;pose.shoulderRX-=swing
       const k=smooth((runU-(loadU-0.22))/0.22)
       blendPose(pose,pose,ATTACK_POSES.load,k)

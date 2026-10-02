@@ -4,7 +4,11 @@ import { add, BALL_RADIUS, fingerPad, reachHand, RIG, rotateY, scale, solveLeg, 
 
 const smooth = (u:number)=>{const k=clamp(u,0,1);return k*k*(3-2*k)}
 export const SETTER_CONTACT_START = 0.85 // final 90 ms of the default preparation
-const RELEASE_LOCAL_Y=2.0
+const WINDOW_Y=2.00    // 准备阶段球窗口的局部高度
+const WINDOW_RISE=0.09 // 触球推送过程中球在窗口内的升高
+// 出手瞬间球的局部高度，必须等于 handBallLocal(1).y：setterRootY 按它抬升重心衔接
+// 出手高度，不同步会让 t=hold 处球位跳变。
+const RELEASE_LOCAL_Y=WINDOW_Y+WINDOW_RISE
 export function setterYaw(pos:Vec2,target:Vec2,direction:SetDirection) {
   return Math.atan2(target.x-pos.x,target.z-pos.z)+(direction==='back'?Math.PI:0)
 }
@@ -26,7 +30,9 @@ function handBallLocal(t:number,direction:SetDirection,hold:number):Vec3 {
   const cushion=0.027*Math.sin(Math.PI*k)
   // Keep the ball in a comfortable forehead window, but in front of the face.
   // The extra reach gives both elbows room to extend instead of folding beside the cheeks.
-  return {x:0,y:1.91+0.09*k-cushion,z:0.25+(direction==='back'?-0.36:0.10)*k}
+  // 正传出手 z 前移 0.06：窗口顶点 (y2.09,z0.24) 是手臂最大触达内的上限，
+  // 再高/再前指腹就够不到球面。
+  return {x:0,y:WINDOW_Y+WINDOW_RISE*k-cushion,z:0.18+(direction==='back'?-0.36:0.06)*k}
 }
 export function setterRelease(pos:Vec2,target:Vec2,height:number,direction:SetDirection):Vec3 {
   const offset=rotateY(handBallLocal(1,direction,1),setterYaw(pos,target,direction))
@@ -40,13 +46,17 @@ export function sampleSetterPose(t:number,height:number,direction:SetDirection,o
   out.rootY=setterRootY(t,height,hold)
   out.curlL=out.curlR=0.28+0.18*Math.sin(Math.PI*k)-0.13*k
   out.spreadL=out.spreadR=0.19
+  // 托球掌心朝内上，腕部局部 X 轴反向：拇指张角取反并近垂直于四指展开，
+  // 使拇指贴掌内缘指向面部，出手瞬间球底擦过拇指根属正常接触。
+  out.thumbL=1.55
+  out.thumbR=-1.55
   const ball=handBallLocal(actionT,direction,hold)
   ball.y+=out.rootY
   for(const side of ['L','R'] as const) {
     const s=side==='L'?1:-1
-    const normal=unit({x:s*0.64,y:-0.70,z:-0.32})
+    const normal=unit({x:s*1.5,y:-0.70,z:-0.32})
     const contact=add(ball,scale(normal,BALL_RADIUS))
-    reachHand(out,side,contact,fingerPad(out,side),scale(normal,-1),{x:s*0.25,y:0.9,z:-0.2})
+    reachHand(out,side,contact,fingerPad(out,side),scale(normal,-1),{x:s*0.50,y:0.9,z:-0.4})
   }
   if(t>hold) {
     // Hands continue briefly after release; the ball is no longer attached.
@@ -54,6 +64,14 @@ export function sampleSetterPose(t:number,height:number,direction:SetDirection,o
     out.elbowL*=1-0.15*follow;out.elbowR*=1-0.15*follow
     const rootY=out.rootY
     blendPose(out,out,POSES.idle,smooth((t-hold-0.08)/0.27))
+    out.rootY=rootY
+  }
+  // 出手后手臂经体前落下（上方混合到 idle）；循环开始时对称地经体前举起，
+  // 否则循环边界处手臂会从体侧瞬移回举球位。
+  const riseT=hold*0.75
+  if(t<riseT) {
+    const rootY=out.rootY
+    blendPose(out,POSES.idle,out,smooth(t/riseT))
     out.rootY=rootY
   }
   const air=Math.max(0,out.rootY+0.006)

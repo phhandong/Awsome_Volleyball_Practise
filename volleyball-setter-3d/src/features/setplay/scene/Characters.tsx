@@ -129,9 +129,9 @@ export function Character({ player, index, isSetter, isAttacker, hidden, flightT
     if (isSetter) {
       return sampleSetterPose(playback.t, params.releaseH, params.setDirection, out, playback.hold)
     }
-    // 其他球员：轻微呼吸起伏
+    // 其他球员：轻微呼吸起伏（只抬升不下沉，避免脚底周期性穿地）
     copyPose(out, base(libero ? 'receive' : 'idle'))
-    out.rootY += Math.sin(time * 1.8 + index * 1.7) * 0.012
+    out.rootY += (0.5 + 0.5 * Math.sin(time * 1.8 + index * 1.7)) * 0.012
     out.shoulderLX += Math.sin(time * 1.3 + index) * 0.04
     out.shoulderRX += Math.sin(time * 1.3 + index + 2) * 0.04
     return out

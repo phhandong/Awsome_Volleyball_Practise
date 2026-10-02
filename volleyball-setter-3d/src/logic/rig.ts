@@ -46,9 +46,11 @@ export function handPoint(pose:Pose,side:Side,point:Vec3):Vec3 {
 export function handLocal(pose:Pose,side:Side) {return handPoint(pose,side,{x:0,y:0,z:0})}
 export const PALM_PAD:Vec3={x:0,y:-0.046,z:0.019}
 export const FINGERS=[{x:-0.030,length:0.047},{x:-0.010,length:0.062},{x:0.010,length:0.067},{x:0.030,length:0.055}]
-// The thumb roots and segments point toward the midline: left hand -X, right hand +X.
-export const thumbBase=(side:Side):Vec3=>({x:(side==='L'?-1:1)*0.036,y:-0.021,z:0.004})
-export const thumbAngle=(pose:Pose,side:Side):Vec3=>({x:-0.35-pose[`curl${side}`]*0.5,y:0,z:(side==='L'?-1:1)*(0.9+pose[`spread${side}`])})
+// The thumb root slides continuously with its splay (tanh through zero), so pose
+// blends that sweep the splay across zero — setter raise/lower through idle —
+// never pop the root across the palm. At full splay it sits at the finger edge.
+export const thumbBase=(pose:Pose,side:Side):Vec3=>({x:Math.tanh(pose[`thumb${side}`]/0.5)*0.036,y:-0.021,z:0.004})
+export const thumbAngle=(pose:Pose,side:Side):Vec3=>({x:-0.35-pose[`curl${side}`]*0.5,y:0,z:pose[`thumb${side}`]})
 /** Axial turning belongs to the forearm. The remaining wrist rotation is swing only. */
 function setHandBasis(pose:Pose,side:Side,x:Vec3,y:Vec3,z:Vec3) {
   const e=eulerFromBasis(x,y,z)

@@ -15,7 +15,7 @@ const plan = () => planAttacker(attacker.pos, target, 2.85, 1.05, useSceneStore.
 const stages = ['二传准备', '二传触球', '二传出手', '助跑倒数第二步', '起跳', '引臂', '挥臂', '扣球触球', '随挥', '落地']
 function stageTime(stage: number) {
   const p = plan()
-  return [0.36, 0.54, 0.6, p.startT + p.runT * 0.68, p.takeoffT,
+  return [0.5, 0.54, 0.6, p.startT + p.runT * 0.68, p.takeoffT,
     p.takeoffT + p.riseT * 0.6, p.contactT - p.riseT * 0.1, p.contactT,
     p.contactT + 0.12, p.landingT + 0.08][stage]
 }

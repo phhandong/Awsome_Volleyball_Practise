@@ -18,6 +18,8 @@ export interface Pose {
   curlR: number
   spreadL: number
   spreadR: number
+  thumbL: number
+  thumbR: number
   hipLY: number
   hipLZ: number
   hipRY: number
@@ -47,24 +49,29 @@ export const NEUTRAL_JOINTS = {
   wristLX: 0, wristLY: 0, wristLZ: 0, wristRX: 0, wristRY: 0, wristRZ: 0,
   forearmRollL: 0, forearmRollR: 0,
   curlL: 0.18, curlR: 0.18, spreadL: 0.14, spreadR: 0.14,
+  // 拇指绕腕局部 Z 轴的张角。中性手位（掌心朝体侧）下局部 -X/+X 即世界中线方向；
+  // 掌心翻转的姿势（如二传朝内托球）会反转局部 X 轴的世界朝向，需按姿势覆写。
+  thumbL: -1.04, thumbR: 1.04,
   hipLY: 0, hipLZ: 0, hipRY: 0, hipRZ: 0,
   ankleLX: 0, ankleLY: 0, ankleLZ: 0, ankleRX: 0, ankleRY: 0, ankleRZ: 0,
 }
 
 export const POSES = {
-  /** 自然站立微屈膝 */
+  /** 自然站立微屈膝。踝背屈抵消小腿前倾使脚掌放平；rootY 与屈膝缩短的腿长匹配，鞋底恰好贴地 */
   idle: {
     ...NEUTRAL_JOINTS,
     hipL: 0.28, hipR: 0.28, kneeL: -0.55, kneeR: -0.55,
+    ankleLX: -0.27, ankleRX: -0.27,
     shoulderLX: 0.12, shoulderLZ: 0.12, shoulderRX: 0.12, shoulderRZ: -0.12,
-    elbowL: 0.3, elbowR: 0.3, torso: 0.14, rootY: -0.05,
+    elbowL: 0.3, elbowR: 0.3, torso: 0.14, rootY: -0.0316,
   },
-  /** 垫球准备 */
+  /** 垫球准备（踝背屈 0.68-1.1，rootY 匹配腿长缩短 0.1326） */
   receive: {
     ...NEUTRAL_JOINTS,
     hipL: 0.68, hipR: 0.68, kneeL: -1.1, kneeR: -1.1,
+    ankleLX: -0.42, ankleRX: -0.42,
     shoulderLX: 0.55, shoulderLZ: 0.14, shoulderRX: 0.55, shoulderRZ: -0.14,
-    elbowL: 0.08, elbowR: 0.08, torso: 0.36, rootY: -0.14,
+    elbowL: 0.08, elbowR: 0.08, torso: 0.36, rootY: -0.1326,
   },
   /** 二传传球准备（手上举至额前） */
   setReady: {
