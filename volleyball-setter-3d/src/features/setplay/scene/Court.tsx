@@ -4,7 +4,7 @@ import { useSceneStore } from '../../../store/sceneStore'
 import { COURT, zoneCenter } from '../../../logic/court'
 import { makeFloorTexture, makeZoneLabelTexture } from './textures'
 
-/** 场地：地板（可选反射）、白色标线、号位标注、看台剪影 */
+/** 场地：地板（可选反射）、白色标线、号位标注 */
 export function Court() {
   const theme = useSceneStore((s) => s.theme)
   const quality = useSceneStore((s) => s.quality)
@@ -66,13 +66,6 @@ export function Court() {
           )
         })}
 
-      {/* 看台剪影（受雾淡化） */}
-      <StandBox position={[0, 1.6, -7.2]} args={[30, 3.2, 2.6]} />
-      <StandBox position={[0, 2.6, -9.4]} args={[30, 2.2, 2.2]} />
-      <StandBox position={[0, 1.6, 16.2]} args={[30, 3.2, 2.6]} />
-      <StandBox position={[0, 2.6, 18.4]} args={[30, 2.2, 2.2]} />
-      <StandBox position={[-15.6, 1.6, 4.5]} args={[2.6, 3.2, 24]} />
-      <StandBox position={[15.6, 1.6, 4.5]} args={[2.6, 3.2, 24]} />
     </group>
   )
 }
@@ -93,21 +86,6 @@ function LineBox({
         emissive="#dfe6ee"
         emissiveIntensity={0.18}
       />
-    </mesh>
-  )
-}
-
-function StandBox({
-  position,
-  args,
-}: {
-  position: [number, number, number]
-  args: [number, number, number]
-}) {
-  return (
-    <mesh position={position}>
-      <boxGeometry args={args} />
-      <meshStandardMaterial color="#141d33" roughness={1} metalness={0} />
     </mesh>
   )
 }

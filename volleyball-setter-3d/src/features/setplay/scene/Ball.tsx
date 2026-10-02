@@ -5,7 +5,7 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import type { Trajectory } from '../../../types'
 import { ballWorld, phaseAt, playback, sampleBall } from '../animation'
-import { makeBallTexture } from './textures'
+import { BallSurface } from './BallSurface'
 import { BALL_RADIUS } from './attackerMotion'
 
 const TRAIL_N = 24
@@ -20,7 +20,6 @@ export function Ball({ traj, attack }: { traj: Trajectory | null; attack: Trajec
   const holdBall = (t: number) => sampleSetterBall(setter?.pos ?? { x: 0.7, z: 1.6 }, params.target, params.releaseH, params.setDirection, t, playback.hold)
   const mesh = useRef<THREE.Mesh>(null)
   const trailRef = useRef<THREE.Line>(null)
-  const ballTex = useMemo(() => makeBallTexture(), [])
 
   const trailGeo = useMemo(() => {
     const g = new THREE.BufferGeometry()
@@ -78,8 +77,7 @@ export function Ball({ traj, attack }: { traj: Trajectory | null; attack: Trajec
   return (
     <group>
       <mesh ref={mesh} castShadow>
-        <sphereGeometry args={[BALL_RADIUS, 32, 24]} />
-        <meshPhysicalMaterial map={ballTex} roughness={0.42} clearcoat={0.5} clearcoatRoughness={0.35} />
+        <BallSurface />
       </mesh>
       <primitive ref={trailRef} object={trailObj} frustumCulled={false} />
     </group>

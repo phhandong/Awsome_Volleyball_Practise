@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import { Character } from '../features/setplay/scene/Characters'
+import { BallSurface } from '../features/setplay/scene/BallSurface'
 import { playback } from '../features/setplay/animation'
 import { planAttacker } from '../logic/approach'
 import { sampleSetterBall, setterRelease } from '../logic/setterMotion'
@@ -42,7 +43,7 @@ function ReviewBall({ setter: isSetter, visible }: { setter: boolean; visible:bo
     ref.current.position.set(pos.x, pos.y, pos.z)
     ref.current.visible = visible && (isSetter ? time <= 0.6 : Math.abs(time - plan().contactT) < 0.025)
   }, -1)
-  return <mesh ref={ref}><sphereGeometry args={[0.105, 24, 16]}/><meshStandardMaterial color="#ffcf48"/></mesh>
+  return <mesh ref={ref}><BallSurface /></mesh>
 }
 export default function Review() {
   const [ballVisible,setBallVisible]=useState(true)

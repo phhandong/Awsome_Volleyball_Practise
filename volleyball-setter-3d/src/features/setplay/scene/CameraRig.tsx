@@ -7,6 +7,7 @@ import { useSceneStore } from '../../../store/sceneStore'
 import { useUiStore, type ViewPreset } from '../../../store/uiStore'
 import { ballWorld, playback } from '../animation'
 import { fitCourtPosition } from '../../../logic/cameraFraming'
+import { captureOrbitView, restoreOrbitView, type OrbitView } from '../../../logic/orbitView'
 import { sampleSetterView } from '../../../logic/setterMotion'
 import { createScratchPose } from './poses'
 
@@ -48,7 +49,9 @@ export function CameraRig() {
     t: number
   } | null>(null)
   const trans = useRef<{ t: number; fromP: THREE.Vector3; fromQ: THREE.Quaternion; toPov: boolean } | null>(null)
-  const exitPose = useRef<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null)
+  const exitPose = useRef<OrbitView | null>(null)
+  const savedOrbit = useRef<OrbitView | null>(null)
+  const previousView = useRef<{ mode: typeof cameraMode; nonce: number; preset: ViewPreset; width: number; height: number } | null>(null)
   const pov = useRef({ yawOff: 0, pitchOff: 0 })
   const povPointer = useRef({ down: false, x: 0, y: 0 })
   const smoothLook = useRef(new THREE.Vector3(0, 2.5, 4.5))
@@ -69,11 +72,42 @@ export function CameraRig() {
     [],
   )
 
-  // 预设机位触发（含重按重触发）
+  // 普通退出恢复进入前的视角；只有主动选择机位才触发预设过渡。
   useEffect(() => {
-    if (cameraMode !== 'orbit') return
     const controls = controlsRef.current
     if (!controls) return
+    const previous = previousView.current
+    previousView.current = { mode: cameraMode, nonce: viewNonce, preset: viewPreset, width: size.width, height: size.height }
+    const presetRequested = !previous || previous.nonce !== viewNonce || previous.preset !== viewPreset
+    if (cameraMode === 'pov') {
+      if (previous?.mode === 'pov') return
+      // A quick re-entry during the return flight keeps the original saved view.
+      if (!trans.current || trans.current.toPov || !savedOrbit.current) savedOrbit.current = captureOrbitView(camera, controls)
+      anim.current = null
+      exitPose.current = null
+      controls.enabled = false
+      trans.current = { t: 0, fromP: camera.position.clone(), fromQ: camera.quaternion.clone(), toPov: true }
+      pov.current.yawOff = 0
+      pov.current.pitchOff = 0
+      smoothLook.current.copy(ballWorld)
+      setBusy(true)
+      return
+    }
+    if (previous?.mode === 'pov' && !presetRequested && savedOrbit.current) {
+      anim.current = null
+      exitPose.current = savedOrbit.current
+      controls.enabled = false
+      trans.current = { t: 0, fromP: camera.position.clone(), fromQ: camera.quaternion.clone(), toPov: false }
+      setBusy(true)
+      return
+    }
+    // POV toolbar changes the canvas height on exit; resizing must not replace the saved view.
+    if (!presetRequested && (trans.current || savedOrbit.current)) return
+    const resized = previous && (previous.width !== size.width || previous.height !== size.height)
+    if (!presetRequested && !resized) return
+    trans.current = null
+    exitPose.current = null
+    savedOrbit.current = null
     const p = PRESETS[viewPreset]
     const position = viewPreset === 'coach' || viewPreset === 'top'
       ? fitCourtPosition(p.pos, p.target, size.width / Math.max(1, size.height)) : p.pos
@@ -98,24 +132,6 @@ export function CameraRig() {
     controls.addEventListener('start', onStart)
     return () => controls.removeEventListener('start', onStart)
   }, [])
-
-  // 模式切换：进入/退出第一人称
-  useEffect(() => {
-    if (cameraMode === 'pov') {
-      trans.current = { t: 0, fromP: camera.position.clone(), fromQ: camera.quaternion.clone(), toPov: true }
-      pov.current.yawOff = 0
-      pov.current.pitchOff = 0
-      smoothLook.current.copy(ballWorld)
-    } else {
-      const p = PRESETS[viewPreset]
-      const position = viewPreset === 'coach' || viewPreset === 'top'
-        ? fitCourtPosition(p.pos, p.target, size.width / Math.max(1, size.height)) : p.pos
-      exitPose.current = { pos: new THREE.Vector3(...position), target: new THREE.Vector3(...p.target) }
-      trans.current = { t: 0, fromP: camera.position.clone(), fromQ: camera.quaternion.clone(), toPov: false }
-    }
-    setBusy(true)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraMode])
 
   useEffect(() => {
     pov.current.yawOff = 0
@@ -178,11 +194,12 @@ export function CameraRig() {
     }
   }, [cameraMode, gl, modal])
 
-  useFrame((_, dt) => {
+  useFrame((state, dt) => {
+    const camera = state.camera as THREE.PerspectiveCamera
     const controls = controlsRef.current
 
     // 屏幕垂直 FOV：第一人称 75°，轨道模式 50°，水平范围随容器比例变化。
-    const targetFov = cameraMode === 'pov' ? 75 : 50
+    const targetFov = cameraMode === 'pov' ? 75 : savedOrbit.current?.fov ?? 50
     if (Math.abs(camera.fov - targetFov) > 0.01) {
       camera.fov = clamp(camera.fov + (targetFov - camera.fov) * (1 - Math.exp(-6 * dt)), 20, 110)
       camera.updateProjectionMatrix()
@@ -195,6 +212,7 @@ export function CameraRig() {
       const k = easeOut(Math.min(1, a.t / 0.85))
       camera.position.lerpVectors(a.fromP, a.toP, k)
       controls.target.lerpVectors(a.fromT, a.toT, k)
+      camera.lookAt(controls.target)
       if (k >= 1) {
         anim.current = null
         setBusy(false)
@@ -233,17 +251,15 @@ export function CameraRig() {
       }
     }
 
-    // 退出第一人称：飞回预设机位后交还轨道控制
+    // 退出第一人称：恢复进入前的位置、朝向、观察中心与视野。
     if (trans.current && !trans.current.toPov && exitPose.current && controls) {
       const tr = trans.current
       tr.t += dt
       const k = easeInOut(Math.min(1, tr.t / 0.7))
       camera.position.lerpVectors(tr.fromP, exitPose.current.pos, k)
-      tmp.m.lookAt(exitPose.current.pos, exitPose.current.target, UP)
-      tmp.desiredQ.setFromRotationMatrix(tmp.m)
-      camera.quaternion.slerpQuaternions(tr.fromQ, tmp.desiredQ, k)
+      camera.quaternion.slerpQuaternions(tr.fromQ, exitPose.current.quaternion, k)
       if (k >= 1) {
-        controls.target.copy(exitPose.current.target)
+        restoreOrbitView(camera, controls, exitPose.current)
         trans.current = null
         exitPose.current = null
         setBusy(false)

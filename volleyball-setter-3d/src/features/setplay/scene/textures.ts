@@ -110,46 +110,62 @@ export function makeNetTexture(): THREE.Texture {
   })
 }
 
-/** 排球贴图：经典六组三色（蓝/黄/白）18 片外观 + 深色缝线 */
+/** Logo 的金黄 / 深蓝弧形拼片。按球面方向绘制，避免经纬方格和极点条纹。 */
 export function makeBallTexture(): THREE.Texture {
   return cached('ball', () => {
     const W = 1024
     const H = 512
     const { c, ctx } = canvas(W, H)
-    const colors = ['#1d4fa1', '#f2c53d', '#f3f2ec']
-    const sector = W / 6
-    for (let i = 0; i < 6; i++) {
-      for (let b = 0; b < 3; b++) {
-        ctx.fillStyle = colors[(i + b) % 3]
-        const y0 = (b * H) / 3
-        ctx.fillRect(i * sector, y0, sector + 1, H / 3 + 1)
+    const bump = canvas(W, H)
+    const colorPixels = ctx.createImageData(W, H)
+    const bumpPixels = bump.ctx.createImageData(W, H)
+    const gold = [255, 208, 32], navy = [22, 60, 147]
+    for (let row = 0; row < H; row++) {
+      const latitude = Math.PI * row / (H - 1)
+      const ring = Math.sin(latitude), sy = Math.cos(latitude)
+      for (let col = 0; col < W; col++) {
+        // SphereGeometry UVs; duplicate the meridian and use one sample at each pole.
+        const longitude = 2 * Math.PI * col / (W - 1)
+        const sx = -ring * Math.cos(longitude), sz = ring * Math.sin(longitude)
+        // A smooth spherical twist gives the six three-panel groups curved edges.
+        const yaw = 0.65 * sy + 0.35
+        const x = sx * Math.cos(yaw) + sz * Math.sin(yaw)
+        const z0 = -sx * Math.sin(yaw) + sz * Math.cos(yaw)
+        const tilt = 0.5 * x + 0.35
+        const y = sy * Math.cos(tilt) - z0 * Math.sin(tilt)
+        const z = sy * Math.sin(tilt) + z0 * Math.cos(tilt)
+        const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z)
+        let across: number, along: number
+        if (ax >= ay && ax >= az) { across = z / ax; along = y / ax }
+        else if (ay >= az) { across = x / ay; along = z / ay }
+        else { across = y / az; along = x / az }
+        const blue = Math.abs(across) < 1 / 3
+        const edge = Math.min(1 - Math.abs(across), 1 - Math.abs(along), Math.abs(Math.abs(across) - 1 / 3))
+        const seam = 1 - THREE.MathUtils.smoothstep(edge, 0.002, 0.014)
+        // Fine, deterministic pebbling lives on the sphere, including across the UV seam.
+        const grain = Math.sin(sx * 235 + Math.sin(sz * 97)) * Math.sin(sy * 241 + sz * 113)
+        const tone = 1 + grain * 0.018 - seam * 0.22
+        const rgb = blue ? navy : gold
+        const i = (row * W + col) * 4
+        for (let channel = 0; channel < 3; channel++) {
+          colorPixels.data[i + channel] = rgb[channel] * tone
+          bumpPixels.data[i + channel] = 170 + grain * 13 - seam * 100
+        }
+        colorPixels.data[i + 3] = bumpPixels.data[i + 3] = 255
       }
     }
-    // 缝线：纵向组界 + 组内条带界（略微倾斜模拟球面拼接）
-    ctx.strokeStyle = 'rgba(20, 22, 26, 0.9)'
-    ctx.lineWidth = 5
-    for (let i = 0; i <= 6; i++) {
-      ctx.beginPath()
-      ctx.moveTo(i * sector, 0)
-      ctx.lineTo(i * sector, H)
-      ctx.stroke()
-    }
-    ctx.lineWidth = 4
-    for (let b = 1; b < 3; b++) {
-      ctx.beginPath()
-      ctx.moveTo(0, (b * H) / 3)
-      ctx.lineTo(W, (b * H) / 3)
-      ctx.stroke()
-    }
-    // 高光晕染（增强球感）
-    const g = ctx.createLinearGradient(0, 0, 0, H)
-    g.addColorStop(0, 'rgba(255,255,255,0.18)')
-    g.addColorStop(0.5, 'rgba(255,255,255,0)')
-    g.addColorStop(1, 'rgba(0,0,0,0.12)')
-    ctx.fillStyle = g
-    ctx.fillRect(0, 0, W, H)
-    return toTexture(c)
+    ctx.putImageData(colorPixels, 0, 0)
+    bump.ctx.putImageData(bumpPixels, 0, 0)
+    const map = toTexture(c), bumpMap = toTexture(bump.c, false)
+    map.wrapS = bumpMap.wrapS = THREE.RepeatWrapping
+    cache.set('ball-bump', bumpMap)
+    return map
   })
+}
+
+export function makeBallBumpTexture(): THREE.Texture {
+  makeBallTexture()
+  return cache.get('ball-bump')!
 }
 
 /** 球员职能贴图（白字描边，透明底） */
